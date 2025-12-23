@@ -4,7 +4,7 @@ import { getSessionId, saveMessages, loadMessages } from '../utils/sessionManage
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { ChatInput } from './ChatInput';
-import { ShadowCard } from './ShadowCard'; // YENİ: Kart bileşeni
+import { ShadowCard } from './ShadowCard';
 import { motion } from 'framer-motion';
 
 const N8N_WEBHOOK_URL = 'https://n8n.lolie.com.tr/webhook/61faf25c-aab1-4246-adfe-2caa274fb839';
@@ -13,12 +13,10 @@ interface ChatContainerProps {
   currentRoom: RoomType;
 }
 
-// YENİ: JSON Algılama Fonksiyonu
+// JSON Algılama Fonksiyonu
 const parseShadowReport = (content: string) => {
   try {
-    // Markdown kod bloklarını temizle
     const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
-    // JSON olup olmadığına bak
     if (cleanJson.startsWith('{') && cleanJson.includes('"type": "shadow_report"')) {
       return JSON.parse(cleanJson);
     }
@@ -33,52 +31,42 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sessionId = useRef(getSessionId());
-  const initializeRef = useRef(false);
-  const previousRoomRef = useRef<RoomType | null>(null);
+  
+  // Hangi odaların başlatıldığını takip etmek için (Tekrar tekrar "Merhaba" demesin)
+  const initializedRooms = useRef<Set<string>>(new Set());
 
+  // --- ODA DEĞİŞİMİ VE YÜKLEME MANTIĞI ---
   useEffect(() => {
-    const stored = loadMessages();
-    if (stored.length > 0) {
-      setMessages(stored as Message[]);
-    }
-  }, []);
+    // 1. Odaya girince hemen o odanın eski mesajlarını yükle
+    const roomMessages = loadMessages(currentRoom);
+    setMessages(roomMessages);
 
-  useEffect(() => {
-    if (!initializeRef.current && messages.length === 0) {
-      initializeRef.current = true;
-      fetchInitialMessage();
+    // 2. Eğer bu oda daha önce hiç konuşulmamışsa (Boşsa) -> AI'yı Başlat
+    // initializedRooms kontrolü: Kullanıcı sayfayı yenilemeden odalar arası gezerse tekrar tetiklenmesin
+    if (roomMessages.length === 0 && !initializedRooms.current.has(currentRoom)) {
+      initializedRooms.current.add(currentRoom);
+      
+      if (currentRoom === 'yuzlesme') {
+        fetchInitialMessage(); // İlk açılış (/start)
+      } else {
+        triggerRoomIntro(currentRoom); // Diğer odalar (Sistem mesajı)
+      }
     }
-  }, [messages]);
-
-  useEffect(() => {
-    if (previousRoomRef.current && previousRoomRef.current !== currentRoom) {
-      handleRoomChange();
-    }
-    previousRoomRef.current = currentRoom;
   }, [currentRoom]);
 
-  const handleRoomChange = async () => {
+  // --- YENİ ODA İÇİN AI TETİKLEME ---
+  const triggerRoomIntro = async (room: string) => {
     setIsLoading(true);
-    setMessages([]); // Odaya girince ekranı temizle
-
     try {
-      const systemMessage = `[SİSTEM: Kullanıcı '${currentRoom}' odasına geçti. Konuyu buna göre değiştir ve sert bir giriş sorusu sor.]`;
-
+      const systemMessage = `[SİSTEM: Kullanıcı '${room}' odasına geçti. Konuyu buna göre değiştir ve sert bir giriş sorusu sor.]`;
+      
       const response = await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: systemMessage,
-          sessionId: sessionId.current,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: systemMessage, sessionId: sessionId.current }),
       });
 
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-
+      if (!response.ok) throw new Error('Network response was not ok');
       const data: ApiResponse = await response.json();
       const aiResponse = data.response || data.message || 'Üzgünüm, bir yanıt oluşturamadım.';
 
@@ -89,43 +77,31 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
         timestamp: new Date(),
       };
 
-      setMessages([aiMessage]);
-      saveMessages([aiMessage]);
+      // Mesajı ekle ve BU ODAYA kaydet
+      setMessages(prev => {
+        const updated = [...prev, aiMessage];
+        saveMessages(updated, room);
+        return updated;
+      });
     } catch (error) {
-      console.error('Error changing room:', error);
-
-      const errorMessage: Message = {
-        id: crypto.randomUUID(),
-        content: 'Bir hata oluştu. Lütfen daha sonra tekrar deneyin.',
-        sender: 'ai',
-        timestamp: new Date(),
-      };
-
-      setMessages([errorMessage]);
-      saveMessages([errorMessage]);
+      console.error('Room intro error:', error);
+      // Hata olsa bile boş bırakma, kullanıcı yazabilsin
     } finally {
       setIsLoading(false);
     }
   };
 
+  // --- İLK AÇILIŞ (/start) ---
   const fetchInitialMessage = async () => {
     setIsLoading(true);
     try {
       const response = await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: '/start',
-          sessionId: sessionId.current,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: '/start', sessionId: sessionId.current }),
       });
 
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-
+      if (!response.ok) throw new Error('Network response was not ok');
       const data: ApiResponse = await response.json();
       const aiResponse = data.response || data.message || 'Üzgünüm, bir yanıt oluşturamadım.';
 
@@ -135,21 +111,11 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
         sender: 'ai',
         timestamp: new Date(),
       };
-
+      
       setMessages([aiMessage]);
-      saveMessages([aiMessage]);
+      saveMessages([aiMessage], 'yuzlesme'); // Yüzleşme odasına kaydet
     } catch (error) {
-      console.error('Error fetching initial message:', error);
-
-      const errorMessage: Message = {
-        id: crypto.randomUUID(),
-        content: 'Bir hata oluştu. Lütfen daha sonra tekrar deneyin.',
-        sender: 'ai',
-        timestamp: new Date(),
-      };
-
-      setMessages([errorMessage]);
-      saveMessages([errorMessage]);
+      console.error('Initial fetch error:', error);
     } finally {
       setIsLoading(false);
     }
@@ -159,6 +125,7 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
+  // --- MESAJ GÖNDERME ---
   const sendMessage = async (content: string) => {
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -167,27 +134,20 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
       timestamp: new Date(),
     };
 
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
-    saveMessages(updatedMessages);
+    // Kullanıcı mesajını ekle ve BU ODAYA kaydet
+    const tempMessages = [...messages, userMessage];
+    setMessages(tempMessages);
+    saveMessages(tempMessages, currentRoom);
     setIsLoading(true);
 
     try {
       const response = await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: content,
-          sessionId: sessionId.current,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: content, sessionId: sessionId.current }),
       });
 
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-
+      if (!response.ok) throw new Error('Network response was not ok');
       const data: ApiResponse = await response.json();
       const aiResponse = data.response || data.message || 'Üzgünüm, bir yanıt oluşturamadım.';
 
@@ -198,32 +158,30 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
         timestamp: new Date(),
       };
 
-      const finalMessages = [...updatedMessages, aiMessage];
-      setMessages(finalMessages);
-      saveMessages(finalMessages);
-    } catch (error) {
-      console.error('Error sending message:', error);
+      // AI cevabını ekle ve BU ODAYA kaydet
+      setMessages(prev => {
+        const final = [...prev, aiMessage];
+        saveMessages(final, currentRoom);
+        return final;
+      });
 
+    } catch (error) {
+      console.error('Send error:', error);
       const errorMessage: Message = {
         id: crypto.randomUUID(),
         content: 'Bir hata oluştu. Lütfen daha sonra tekrar deneyin.',
         sender: 'ai',
         timestamp: new Date(),
       };
-
-      const finalMessages = [...updatedMessages, errorMessage];
-      setMessages(finalMessages);
-      saveMessages(finalMessages);
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    // DÜZELTME 1: Mobil uyumlu yükseklik ve genişlik ayarları
     <div className="flex flex-col h-[100dvh] w-full md:ml-0 bg-gradient-to-b from-black via-gray-950 to-black">
       
-      {/* DÜZELTME 2: Padding değerleri artırıldı (Header ve Input altında kalmasın diye) */}
       <div className="flex-1 overflow-y-auto pt-32 pb-48 px-4 scroll-smooth overscroll-contain">
         <div className="max-w-4xl mx-auto space-y-6">
           {messages.length === 0 && !isLoading && (
@@ -237,21 +195,12 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
           )}
 
           {messages.map((message, index) => {
-            // YENİ: Mesajın rapor olup olmadığını kontrol et
             const reportData = message.sender === 'ai' ? parseShadowReport(message.content) : null;
-
-            if (reportData) {
-              // Raporsa Kart Göster
-              return <ShadowCard key={message.id} data={reportData} />;
-            }
-
-            // Değilse senin orijinal Baloncuğunu göster
+            if (reportData) return <ShadowCard key={message.id} data={reportData} />;
             return <MessageBubble key={message.id} message={message} index={index} />;
           })}
 
           {isLoading && <TypingIndicator />}
-
-          {/* DÜZELTME 3: En altta görünmez boşluk */}
           <div ref={messagesEndRef} className="h-4" />
         </div>
       </div>
