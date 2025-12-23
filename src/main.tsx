@@ -3,33 +3,32 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 
-// --- ZORUNLU YENİLEME SİSTEMİ ---
-const CURRENT_VERSION = "1.0.5"; // Her güncellemede bu sayıyı değiştir!
-
-// 1. Eski Service Worker'ları temizle
+// --- ZOMBİ SW TEMİZLİĞİ ---
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    for (let registration of registrations) {
-      registration.unregister();
-    }
-  });
-}
-
-// 2. Versiyon kontrolü yap
-const storedVersion = localStorage.getItem('app_version');
-if (storedVersion !== CURRENT_VERSION) {
-  // Versiyon değişmişse önbelleği temizle ve sayfayı yenile
-  console.log('Yeni versiyon bulundu! Temizlik yapılıyor...');
-  
-  if ('caches' in window) {
-    caches.keys().then((names) => {
-      names.forEach((name) => caches.delete(name));
+  window.addEventListener('load', () => {
+    // 1. Önce var olanları silmeye çalış
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (let registration of registrations) {
+        registration.unregister();
+      }
     });
-  }
-  
-  localStorage.setItem('app_version', CURRENT_VERSION);
-  // Sonsuz döngüye girmemesi için reload'u bir kez yap
-  window.location.reload();
+
+    // 2. Bizim "İmha Timi"ni (sw.js) yükle
+    // URL'in sonuna rastgele sayı ekliyoruz ki tarayıcı yeni dosya olduğunu anlasın (?v=...)
+    navigator.serviceWorker.register('/sw.js?v=' + Date.now()).then((reg) => {
+      // Yeni SW yüklendiğinde sayfayı yenile
+      reg.onupdatefound = () => {
+        const installingWorker = reg.installing;
+        if (installingWorker) {
+          installingWorker.onstatechange = () => {
+            if (installingWorker.state === 'activated') {
+              window.location.reload();
+            }
+          };
+        }
+      };
+    });
+  });
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
