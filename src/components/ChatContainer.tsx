@@ -4,7 +4,7 @@ import { getSessionId, saveMessages, loadMessages } from '../utils/sessionManage
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { ChatInput } from './ChatInput';
-import { ShadowCard } from './ShadowCard'; // <--- YENİ: Kart bileşenini ekledik
+import { ShadowCard } from './ShadowCard';
 import { motion } from 'framer-motion';
 
 const N8N_WEBHOOK_URL = 'https://n8n.lolie.com.tr/webhook/61faf25c-aab1-4246-adfe-2caa274fb839';
@@ -13,12 +13,10 @@ interface ChatContainerProps {
   currentRoom: RoomType;
 }
 
-// <--- YENİ: JSON Algılama Fonksiyonu
+// JSON Algılama Fonksiyonu
 const parseShadowReport = (content: string) => {
   try {
-    // Markdown kod bloklarını temizle (```json ... ```)
     const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
-    // JSON olup olmadığına bak
     if (cleanJson.startsWith('{') && cleanJson.includes('"type": "shadow_report"')) {
       return JSON.parse(cleanJson);
     }
@@ -220,12 +218,9 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
   };
 
   return (
-    // h-screen yerine h-[100dvh] kullanarak mobil tarayıcı sorununu çözdük
     <div className="flex flex-col h-[100dvh] w-full md:ml-0 bg-gradient-to-b from-black via-gray-950 to-black">
       
       {/* Mesaj Alanı */}
-      {/* pt-24: Üst menüden kurtarmak için artırıldı */}
-      {/* pb-32: Alt input alanından kurtarmak için artırıldı */}
       <div className="flex-1 overflow-y-auto pt-24 pb-32 px-4 scroll-smooth">
         <div className="max-w-4xl mx-auto space-y-6">
           {messages.length === 0 && !isLoading && (
@@ -258,3 +253,4 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
       <ChatInput onSend={sendMessage} disabled={isLoading} />
     </div>
   );
+};
