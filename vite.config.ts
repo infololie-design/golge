@@ -1,9 +1,18 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// PWA eklentisini kaldırdık. Sadece React eklentisi kaldı.
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // Her build işleminde dosya isimlerini değiştir (Hash ekle)
+    rollupOptions: {
+      output: {
+        entryFileNames: `assets/[name].[hash].${Date.now()}.js`,
+        chunkFileNames: `assets/[name].[hash].${Date.now()}.js`,
+        assetFileNames: `assets/[name].[hash].${Date.now()}.[ext]`
+      }
+    }
+  },
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
