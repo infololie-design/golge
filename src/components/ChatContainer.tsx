@@ -4,6 +4,7 @@ import { getSessionId, saveMessages, loadMessages } from '../utils/sessionManage
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { ChatInput } from './ChatInput';
+import { ShadowCard } from './ShadowCard'; // <--- YENİ: Kart bileşenini ekledik
 import { motion } from 'framer-motion';
 
 const N8N_WEBHOOK_URL = 'https://n8n.lolie.com.tr/webhook/61faf25c-aab1-4246-adfe-2caa274fb839';
@@ -11,6 +12,21 @@ const N8N_WEBHOOK_URL = 'https://n8n.lolie.com.tr/webhook/61faf25c-aab1-4246-adf
 interface ChatContainerProps {
   currentRoom: RoomType;
 }
+
+// <--- YENİ: JSON Algılama Fonksiyonu
+const parseShadowReport = (content: string) => {
+  try {
+    // Markdown kod bloklarını temizle (```json ... ```)
+    const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
+    // JSON olup olmadığına bak
+    if (cleanJson.startsWith('{') && cleanJson.includes('"type": "shadow_report"')) {
+      return JSON.parse(cleanJson);
+    }
+  } catch (e) {
+    return null;
+  }
+  return null;
+};
 
 export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -217,9 +233,19 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
             </motion.div>
           )}
 
-          {messages.map((message, index) => (
-            <MessageBubble key={message.id} message={message} index={index} />
-          ))}
+          {/* <--- YENİ: Mesajları dönerken kontrol ediyoruz ---> */}
+          {messages.map((message, index) => {
+            // Sadece AI mesajlarında rapor kontrolü yap
+            const reportData = message.sender === 'ai' ? parseShadowReport(message.content) : null;
+
+            if (reportData) {
+              // Eğer raporsa Kart göster
+              return <ShadowCard key={message.id} data={reportData} />;
+            }
+
+            // Değilse senin eski MessageBubble'ını göster
+            return <MessageBubble key={message.id} message={message} index={index} />;
+          })}
 
           {isLoading && <TypingIndicator />}
 
