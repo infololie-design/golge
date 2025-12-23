@@ -1,32 +1,39 @@
-const SESSION_KEY = 'golge_session_id';
-const MESSAGES_KEY = 'golge_messages';
+import { Message } from '../types';
 
-export const generateSessionId = (): string => {
-  return crypto.randomUUID();
-};
+const SESSION_KEY = 'golge_session_id';
 
 export const getSessionId = (): string => {
   let sessionId = localStorage.getItem(SESSION_KEY);
-
   if (!sessionId) {
-    sessionId = generateSessionId();
+    sessionId = crypto.randomUUID();
     localStorage.setItem(SESSION_KEY, sessionId);
   }
-
   return sessionId;
 };
 
-export const resetSession = (): void => {
+// ARTIK ODA İSMİNE GÖRE KAYDEDİYORUZ
+export const saveMessages = (messages: Message[], roomId: string) => {
+  localStorage.setItem(`golge_messages_${roomId}`, JSON.stringify(messages));
+};
+
+// ARTIK ODA İSMİNE GÖRE ÇEKİYORUZ
+export const loadMessages = (roomId: string): Message[] => {
+  const saved = localStorage.getItem(`golge_messages_${roomId}`);
+  if (saved) {
+    return JSON.parse(saved).map((msg: any) => ({
+      ...msg,
+      timestamp: new Date(msg.timestamp),
+    }));
+  }
+  return [];
+};
+
+export const clearSession = () => {
   localStorage.removeItem(SESSION_KEY);
-  localStorage.removeItem(MESSAGES_KEY);
-  window.location.reload();
-};
-
-export const saveMessages = (messages: unknown[]): void => {
-  localStorage.setItem(MESSAGES_KEY, JSON.stringify(messages));
-};
-
-export const loadMessages = (): unknown[] => {
-  const stored = localStorage.getItem(MESSAGES_KEY);
-  return stored ? JSON.parse(stored) : [];
+  // Tüm odaların mesajlarını temizle
+  Object.keys(localStorage).forEach((key) => {
+    if (key.startsWith('golge_messages_')) {
+      localStorage.removeItem(key);
+    }
+  });
 };
