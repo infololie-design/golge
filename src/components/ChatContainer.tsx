@@ -221,13 +221,15 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
     <div className="flex flex-col h-[100dvh] w-full md:ml-0 bg-gradient-to-b from-black via-gray-950 to-black">
       
       {/* Mesaj Alanı */}
-      <div className="flex-1 overflow-y-auto pt-24 pb-32 px-4 scroll-smooth">
+      {/* pt-32: Üst menüden kurtarmak için iyice artırdık (128px) */}
+      {/* pb-48: Alt input alanından ve klavyeden kurtarmak için iyice artırdık (192px) */}
+      <div className="flex-1 overflow-y-auto pt-32 pb-48 px-4 scroll-smooth overscroll-contain">
         <div className="max-w-4xl mx-auto space-y-6">
           {messages.length === 0 && !isLoading && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex items-center justify-center h-full text-gray-600 text-center mt-20"
+              className="flex items-center justify-center h-full text-gray-600 text-center mt-10"
             >
               <p>Karanlığa hoş geldiniz...</p>
             </motion.div>
@@ -245,7 +247,8 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
 
           {isLoading && <TypingIndicator />}
 
-          <div ref={messagesEndRef} />
+          {/* Görünmez Tampon Bölge (En alttaki mesajın kesilmesini engeller) */}
+          <div ref={messagesEndRef} className="h-4" />
         </div>
       </div>
 
