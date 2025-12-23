@@ -1,6 +1,7 @@
 import React from 'react';
 import { ROOMS, RoomType } from '../types';
-import { X } from 'lucide-react';
+import { X, Trash2 } from 'lucide-react'; // Çöp kutusu ikonu eklendi
+import { clearSession } from '../utils/sessionManager'; // Silme fonksiyonu eklendi
 
 interface SidebarProps {
   currentRoom: RoomType;
@@ -10,6 +11,15 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isOpen, onClose }) => {
+  
+  // SIFIRLAMA FONKSİYONU
+  const handleReset = () => {
+    if (window.confirm('Tüm konuşma geçmişi ve hafıza silinecek. En başa dönmek istediğine emin misin?')) {
+      clearSession(); // Hafızayı temizle
+      window.location.reload(); // Sayfayı yenile
+    }
+  };
+
   return (
     <>
       {/* MOBİL İÇİN KARARTMA PERDESİ */}
@@ -30,15 +40,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
       `}>
         <div className="p-6 h-full flex flex-col">
           
-          {/* Başlık */}
+          {/* BAŞLIK VE BUTONLAR */}
           <div className="flex items-center justify-between mb-8">
             <h1 className="text-2xl font-bold text-red-600 tracking-widest">GÖLGE</h1>
-            <button onClick={onClose} className="md:hidden text-zinc-400 hover:text-white">
-              <X className="w-6 h-6" />
-            </button>
+            
+            <div className="flex items-center gap-3">
+              {/* ÇÖP KUTUSU (RESET) BUTONU */}
+              <button 
+                onClick={handleReset}
+                className="text-zinc-500 hover:text-red-500 transition-colors p-1 rounded-md hover:bg-zinc-900"
+                title="Tüm geçmişi sil ve sıfırla"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+
+              {/* MOBİL KAPATMA BUTONU */}
+              <button onClick={onClose} className="md:hidden text-zinc-400 hover:text-white">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
           </div>
 
-          {/* Menü Listesi */}
+          {/* MENÜ LİSTESİ */}
           <div className="mb-6">
             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4">
               Odalar
@@ -50,14 +73,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
                   onClick={() => onRoomChange(room.id)}
                   className={`w-full flex items-center gap-3 px-4 py-4 rounded-lg transition-all duration-200 text-left group border ${
                     currentRoom === room.id
-                      ? 'bg-red-900/20 border-red-900/50' // Aktif buton arka planı
-                      : 'bg-transparent border-transparent hover:bg-zinc-900' // Pasif buton
+                      ? 'bg-red-900/20 border-red-900/50' 
+                      : 'bg-transparent border-transparent hover:bg-zinc-900'
                   }`}
                 >
-                  {/* İkon */}
                   <span className="text-xl">{room.icon}</span>
-                  
-                  {/* İsim (Rengi zorla beyaz/gri yapıyoruz) */}
                   <span className={`font-medium text-sm ${
                     currentRoom === room.id ? 'text-red-400' : 'text-zinc-300 group-hover:text-white'
                   }`}>
@@ -68,7 +88,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
             </nav>
           </div>
 
-          {/* Alt Bilgi */}
+          {/* ALT BİLGİ */}
           <div className="mt-auto pt-6 border-t border-zinc-900">
             <p className="text-xs text-zinc-600 leading-relaxed">
               Keşfetmek istediğin odayı seç. Her oda, senin gölgenin farklı bir yönünü ortaya çıkaracak.
