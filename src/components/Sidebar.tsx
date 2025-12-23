@@ -5,14 +5,14 @@ import { X } from 'lucide-react';
 interface SidebarProps {
   currentRoom: RoomType;
   onRoomChange: (room: RoomType) => void;
-  isOpen: boolean;     // Yeni özellik
-  onClose: () => void; // Yeni özellik
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isOpen, onClose }) => {
   return (
     <>
-      {/* MOBİL İÇİN KARARTMA PERDESİ (Overlay) */}
+      {/* MOBİL İÇİN KARARTMA PERDESİ */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden"
@@ -30,14 +30,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
       `}>
         <div className="p-6 h-full flex flex-col">
           
-          {/* Başlık ve Kapat Butonu */}
+          {/* Başlık */}
           <div className="flex items-center justify-between mb-8">
             <h1 className="text-2xl font-bold text-red-600 tracking-widest">GÖLGE</h1>
-            <button onClick={onClose} className="md:hidden text-zinc-500">
+            <button onClick={onClose} className="md:hidden text-zinc-400 hover:text-white">
               <X className="w-6 h-6" />
             </button>
           </div>
 
+          {/* Menü Listesi */}
           <div className="mb-6">
             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4">
               Odalar
@@ -47,19 +48,27 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
                 <button
                   key={room.id}
                   onClick={() => onRoomChange(room.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 text-left group ${
+                  className={`w-full flex items-center gap-3 px-4 py-4 rounded-lg transition-all duration-200 text-left group border ${
                     currentRoom === room.id
-                      ? 'bg-red-900/20 text-red-500 border border-red-900/30'
-                      : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                      ? 'bg-red-900/20 border-red-900/50' // Aktif buton arka planı
+                      : 'bg-transparent border-transparent hover:bg-zinc-900' // Pasif buton
                   }`}
                 >
-                  <span className="text-xl group-hover:scale-110 transition-transform">{room.icon}</span>
-                  <span className="font-medium">{room.name}</span>
+                  {/* İkon */}
+                  <span className="text-xl">{room.icon}</span>
+                  
+                  {/* İsim (Rengi zorla beyaz/gri yapıyoruz) */}
+                  <span className={`font-medium text-sm ${
+                    currentRoom === room.id ? 'text-red-400' : 'text-zinc-300 group-hover:text-white'
+                  }`}>
+                    {room.name}
+                  </span>
                 </button>
               ))}
             </nav>
           </div>
 
+          {/* Alt Bilgi */}
           <div className="mt-auto pt-6 border-t border-zinc-900">
             <p className="text-xs text-zinc-600 leading-relaxed">
               Keşfetmek istediğin odayı seç. Her oda, senin gölgenin farklı bir yönünü ortaya çıkaracak.
