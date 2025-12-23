@@ -220,7 +220,7 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
   };
 
   return (
-    <div className="flex flex-col h-screen ml-64 bg-gradient-to-b from-black via-gray-950 to-black">
+    <div className="flex flex-col h-screen w-full md:ml-0 bg-gradient-to-b from-black via-gray-950 to-black pt-16 md:pt-0">
       <div className="flex-1 overflow-y-auto pt-20 pb-24 px-4">
         <div className="max-w-4xl mx-auto">
           {messages.length === 0 && !isLoading && (
