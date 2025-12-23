@@ -220,30 +220,31 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
   };
 
   return (
-    <div className="flex flex-col h-screen w-full md:ml-0 bg-gradient-to-b from-black via-gray-950 to-black pt-16 md:pt-0">
-      <div className="flex-1 overflow-y-auto pt-20 pb-24 px-4">
-        <div className="max-w-4xl mx-auto">
+    // h-screen yerine h-[100dvh] kullanarak mobil tarayıcı sorununu çözdük
+    <div className="flex flex-col h-[100dvh] w-full md:ml-0 bg-gradient-to-b from-black via-gray-950 to-black">
+      
+      {/* Mesaj Alanı */}
+      {/* pt-24: Üst menüden kurtarmak için artırıldı */}
+      {/* pb-32: Alt input alanından kurtarmak için artırıldı */}
+      <div className="flex-1 overflow-y-auto pt-24 pb-32 px-4 scroll-smooth">
+        <div className="max-w-4xl mx-auto space-y-6">
           {messages.length === 0 && !isLoading && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex items-center justify-center h-full text-gray-600 text-center"
+              className="flex items-center justify-center h-full text-gray-600 text-center mt-20"
             >
               <p>Karanlığa hoş geldiniz...</p>
             </motion.div>
           )}
 
-          {/* <--- YENİ: Mesajları dönerken kontrol ediyoruz ---> */}
           {messages.map((message, index) => {
-            // Sadece AI mesajlarında rapor kontrolü yap
             const reportData = message.sender === 'ai' ? parseShadowReport(message.content) : null;
 
             if (reportData) {
-              // Eğer raporsa Kart göster
               return <ShadowCard key={message.id} data={reportData} />;
             }
 
-            // Değilse senin eski MessageBubble'ını göster
             return <MessageBubble key={message.id} message={message} index={index} />;
           })}
 
@@ -253,7 +254,7 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
         </div>
       </div>
 
+      {/* Input Alanı */}
       <ChatInput onSend={sendMessage} disabled={isLoading} />
     </div>
   );
-};
