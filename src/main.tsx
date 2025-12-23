@@ -3,24 +3,28 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 
-// --- KILL SWITCH (ÖNBELLEK TEMİZLEYİCİ) ---
-// Eğer tarayıcıda kayıtlı bir Service Worker varsa, onu bul ve yok et.
+// --- ZOMBİ TEMİZLİĞİ ---
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(function(registrations) {
-    for(let registration of registrations) {
-      registration.unregister()
-        .then(() => console.log('Eski Service Worker silindi. Site güncelleniyor...'));
+  navigator.serviceWorker.getRegistrations().then(function (registrations) {
+    for (let registration of registrations) {
+      registration.unregister();
+      console.log('Eski Service Worker silindi.');
+    }
+    // Eğer eski bir SW bulup sildiysek ve bu ilk yükleme değilse, sayfayı yenile
+    if (registrations.length > 0 && !sessionStorage.getItem('reloaded')) {
+      sessionStorage.setItem('reloaded', 'true');
+      window.location.reload();
     }
   });
-  
-  // Önbellekleri de temizlemeye çalış
-  if ('caches' in window) {
-    caches.keys().then((names) => {
-      names.forEach((name) => {
-        caches.delete(name);
-      });
+}
+
+// Önbellekleri temizle
+if ('caches' in window) {
+  caches.keys().then((names) => {
+    names.forEach((name) => {
+      caches.delete(name);
     });
-  }
+  });
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
