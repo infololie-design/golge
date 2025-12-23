@@ -1,36 +1,23 @@
-const CACHE_NAME = 'golge-v1';
-const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-];
-
+// v1.0.0 - CACHE KILLER
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(urlsToCache);
-    })
-  );
-});
-
-self.addEventListener('fetch', (event) => {
-  event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
-    })
-  );
+  self.skipWaiting(); // Bekleme, hemen yüklen
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
+    caches.keys().then((keyList) => {
       return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
+        keyList.map((key) => {
+          console.log('Eski önbellek siliniyor:', key);
+          return caches.delete(key);
         })
       );
     })
   );
+  return self.clients.claim(); // Sayfanın kontrolünü hemen al
+});
+
+self.addEventListener('fetch', (event) => {
+  // Asla önbellekten verme, her şeyi ağdan çek
+  event.respondWith(fetch(event.request));
 });
