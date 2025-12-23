@@ -10,3 +10,7 @@ export interface ApiResponse {
   message?: string;
   error?: string;
 }
+
+export type RoomType = 'Yüzleşme' | 'Anne/Baba Yarası' | 'İlişkiler' | 'Para';
+
+export const ROOMS: RoomType[] = ['Yüzleşme', 'Anne/Baba Yarası', 'İlişkiler', 'Para'];

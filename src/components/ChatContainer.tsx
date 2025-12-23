@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Message, ApiResponse } from '../types';
+import { Message, ApiResponse, RoomType } from '../types';
 import { getSessionId, saveMessages, loadMessages } from '../utils/sessionManager';
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
@@ -8,12 +8,17 @@ import { motion } from 'framer-motion';
 
 const N8N_WEBHOOK_URL = 'https://n8n.lolie.com.tr/webhook/61faf25c-aab1-4246-adfe-2caa274fb839';
 
-export const ChatContainer = () => {
+interface ChatContainerProps {
+  currentRoom: RoomType;
+}
+
+export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sessionId = useRef(getSessionId());
   const initializeRef = useRef(false);
+  const previousRoomRef = useRef<RoomType | null>(null);
 
   useEffect(() => {
     const stored = loadMessages();
@@ -28,6 +33,64 @@ export const ChatContainer = () => {
       fetchInitialMessage();
     }
   }, [messages]);
+
+  useEffect(() => {
+    if (previousRoomRef.current && previousRoomRef.current !== currentRoom) {
+      handleRoomChange();
+    }
+    previousRoomRef.current = currentRoom;
+  }, [currentRoom]);
+
+  const handleRoomChange = async () => {
+    setIsLoading(true);
+    setMessages([]);
+
+    try {
+      const systemMessage = `[SİSTEM: Kullanıcı '${currentRoom}' odasına geçti. Konuyu buna göre değiştir ve sert bir giriş sorusu sor.]`;
+
+      const response = await fetch(N8N_WEBHOOK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: systemMessage,
+          sessionId: sessionId.current,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+
+      const data: ApiResponse = await response.json();
+      const aiResponse = data.response || data.message || 'Üzgünüm, bir yanıt oluşturamadım.';
+
+      const aiMessage: Message = {
+        id: crypto.randomUUID(),
+        content: aiResponse,
+        sender: 'ai',
+        timestamp: new Date(),
+      };
+
+      setMessages([aiMessage]);
+      saveMessages([aiMessage]);
+    } catch (error) {
+      console.error('Error changing room:', error);
+
+      const errorMessage: Message = {
+        id: crypto.randomUUID(),
+        content: 'Bir hata oluştu. Lütfen daha sonra tekrar deneyin.',
+        sender: 'ai',
+        timestamp: new Date(),
+      };
+
+      setMessages([errorMessage]);
+      saveMessages([errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const fetchInitialMessage = async () => {
     setIsLoading(true);
@@ -141,10 +204,10 @@ export const ChatContainer = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-b from-black via-gray-950 to-black">
+    <div className="flex flex-col h-screen ml-64 bg-gradient-to-b from-black via-gray-950 to-black">
       <div className="flex-1 overflow-y-auto pt-20 pb-24 px-4">
         <div className="max-w-4xl mx-auto">
-          {messages.length === 0 && (
+          {messages.length === 0 && !isLoading && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
