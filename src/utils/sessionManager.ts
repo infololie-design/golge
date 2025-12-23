@@ -11,13 +11,13 @@ export const getSessionId = (): string => {
   return sessionId;
 };
 
-// ARTIK ODA İSMİNE GÖRE KAYDEDİYORUZ
-export const saveMessages = (messages: Message[], roomId: string) => {
+// GÜNCELLEME: Artık oda ismine (roomId) göre kaydediyoruz
+export const saveMessages = (messages: Message[], roomId: string = 'yuzlesme') => {
   localStorage.setItem(`golge_messages_${roomId}`, JSON.stringify(messages));
 };
 
-// ARTIK ODA İSMİNE GÖRE ÇEKİYORUZ
-export const loadMessages = (roomId: string): Message[] => {
+// GÜNCELLEME: Artık oda ismine (roomId) göre çekiyoruz
+export const loadMessages = (roomId: string = 'yuzlesme'): Message[] => {
   const saved = localStorage.getItem(`golge_messages_${roomId}`);
   if (saved) {
     return JSON.parse(saved).map((msg: any) => ({
