@@ -4,7 +4,7 @@ import { getSessionId, saveMessages, loadMessages } from '../utils/sessionManage
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { ChatInput } from './ChatInput';
-import { ShadowCard } from './ShadowCard';
+import { ShadowCard } from './ShadowCard'; // YENİ: Kart bileşeni
 import { motion } from 'framer-motion';
 
 const N8N_WEBHOOK_URL = 'https://n8n.lolie.com.tr/webhook/61faf25c-aab1-4246-adfe-2caa274fb839';
@@ -13,10 +13,12 @@ interface ChatContainerProps {
   currentRoom: RoomType;
 }
 
-// JSON Algılama Fonksiyonu
+// YENİ: JSON Algılama Fonksiyonu
 const parseShadowReport = (content: string) => {
   try {
+    // Markdown kod bloklarını temizle
     const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
+    // JSON olup olmadığına bak
     if (cleanJson.startsWith('{') && cleanJson.includes('"type": "shadow_report"')) {
       return JSON.parse(cleanJson);
     }
@@ -57,7 +59,7 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
 
   const handleRoomChange = async () => {
     setIsLoading(true);
-    setMessages([]);
+    setMessages([]); // Odaya girince ekranı temizle
 
     try {
       const systemMessage = `[SİSTEM: Kullanıcı '${currentRoom}' odasına geçti. Konuyu buna göre değiştir ve sert bir giriş sorusu sor.]`;
@@ -218,11 +220,10 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
   };
 
   return (
+    // DÜZELTME 1: Mobil uyumlu yükseklik ve genişlik ayarları
     <div className="flex flex-col h-[100dvh] w-full md:ml-0 bg-gradient-to-b from-black via-gray-950 to-black">
       
-      {/* Mesaj Alanı */}
-      {/* pt-32: Üst menüden kurtarmak için iyice artırdık (128px) */}
-      {/* pb-48: Alt input alanından ve klavyeden kurtarmak için iyice artırdık (192px) */}
+      {/* DÜZELTME 2: Padding değerleri artırıldı (Header ve Input altında kalmasın diye) */}
       <div className="flex-1 overflow-y-auto pt-32 pb-48 px-4 scroll-smooth overscroll-contain">
         <div className="max-w-4xl mx-auto space-y-6">
           {messages.length === 0 && !isLoading && (
@@ -236,23 +237,25 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
           )}
 
           {messages.map((message, index) => {
+            // YENİ: Mesajın rapor olup olmadığını kontrol et
             const reportData = message.sender === 'ai' ? parseShadowReport(message.content) : null;
 
             if (reportData) {
+              // Raporsa Kart Göster
               return <ShadowCard key={message.id} data={reportData} />;
             }
 
+            // Değilse senin orijinal Baloncuğunu göster
             return <MessageBubble key={message.id} message={message} index={index} />;
           })}
 
           {isLoading && <TypingIndicator />}
 
-          {/* Görünmez Tampon Bölge (En alttaki mesajın kesilmesini engeller) */}
+          {/* DÜZELTME 3: En altta görünmez boşluk */}
           <div ref={messagesEndRef} className="h-4" />
         </div>
       </div>
 
-      {/* Input Alanı */}
       <ChatInput onSend={sendMessage} disabled={isLoading} />
     </div>
   );
