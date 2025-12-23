@@ -13,22 +13,68 @@ export const ChatContainer = () => {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sessionId = useRef(getSessionId());
+  const initializeRef = useRef(false);
 
   useEffect(() => {
     const stored = loadMessages();
     if (stored.length > 0) {
       setMessages(stored as Message[]);
-    } else {
-      const welcomeMessage: Message = {
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!initializeRef.current && messages.length === 0) {
+      initializeRef.current = true;
+      fetchInitialMessage();
+    }
+  }, [messages]);
+
+  const fetchInitialMessage = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(N8N_WEBHOOK_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: '/start',
+          sessionId: sessionId.current,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+
+      const data: ApiResponse = await response.json();
+      const aiResponse = data.response || data.message || 'Üzgünüm, bir yanıt oluşturamadım.';
+
+      const aiMessage: Message = {
         id: crypto.randomUUID(),
-        content: 'Merhaba. Ben senin gölge benliğinim. Burada, içindeki en derin düşünceleri, bastırılmış duyguları ve karanlık köşeleri keşfetmek için varım. Ne söylemek istiyorsun?',
+        content: aiResponse,
         sender: 'ai',
         timestamp: new Date(),
       };
-      setMessages([welcomeMessage]);
-      saveMessages([welcomeMessage]);
+
+      setMessages([aiMessage]);
+      saveMessages([aiMessage]);
+    } catch (error) {
+      console.error('Error fetching initial message:', error);
+
+      const errorMessage: Message = {
+        id: crypto.randomUUID(),
+        content: 'Bir hata oluştu. Lütfen daha sonra tekrar deneyin.',
+        sender: 'ai',
+        timestamp: new Date(),
+      };
+
+      setMessages([errorMessage]);
+      saveMessages([errorMessage]);
+    } finally {
+      setIsLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
