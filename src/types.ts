@@ -1,14 +1,14 @@
-export type RoomType = 'yuzlesme' | 'anne_baba' | 'iliskiler' | 'para';
+export type RoomType = 'yuzlesme' | 'kokler' | 'iliskiler' | 'para';
 
 export interface Room {
   id: RoomType;
   name: string;
-  icon: string; // İkonu basit string (emoji) olarak tutacağız
+  icon: string;
 }
 
 export const ROOMS: Room[] = [
   { id: 'yuzlesme', name: 'Yüzleşme', icon: '🔥' },
-  { id: 'anne_baba', name: 'Anne/Baba Yarası', icon: '💔' },
+  { id: 'kokler', name: 'Kökler', icon: '🌳' }, // İsim ve İkon değişti
   { id: 'iliskiler', name: 'İlişkiler', icon: '❤️‍🩹' },
   { id: 'para', name: 'Para', icon: '💰' },
 ];
