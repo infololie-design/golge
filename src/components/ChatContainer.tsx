@@ -43,7 +43,7 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
     currentRoomRef.current = currentRoom;
   }, [currentRoom]);
 
-  // --- ZAMAN AŞIMI (İptal etme özelliği yok, sadece timeout var) ---
+  // --- ZAMAN AŞIMI ---
   const fetchWithTimeout = async (url: string, options: RequestInit, timeout = 30000) => {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
@@ -63,8 +63,7 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
     const roomMessages = loadMessages(currentRoom);
     setMessages(roomMessages);
     
-    // Oda değiştiğinde loading'i kapat (Eğer önceki odada loading kaldıysa)
-    // Not: Arka plandaki işlem devam eder, sadece bu ekrandaki dönen tekerlek durur.
+    // Oda değiştiğinde loading'i kapat
     setIsLoading(false);
 
     // 2. Oda boşsa AI'yı başlat
@@ -103,15 +102,14 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
         timestamp: new Date(),
       };
 
-      // --- KRİTİK NOKTA: ARKA PLAN KAYDI ---
-      // 1. Hedef odanın EN GÜNCEL mesajlarını depodan çek (State'den değil!)
-      // Çünkü kullanıcı o sırada başka odada olabilir, State başka odayı gösteriyor olabilir.
+      // --- ARKA PLAN KAYDI ---
+      // 1. Hedef odanın EN GÜNCEL mesajlarını depodan çek
       const currentStoredMessages = loadMessages(targetRoom);
       
       // 2. Yeni mesajı ekle
       const updatedMessages = [...currentStoredMessages, aiMessage];
       
-      // 3. Depoya kaydet (Sessizce)
+      // 3. Depoya kaydet
       saveMessages(updatedMessages, targetRoom);
 
       // 4. EĞER kullanıcı hala o odadaysa, ekranı da güncelle
@@ -150,8 +148,24 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
     setMessages(tempMessages);
     saveMessages(tempMessages, currentRoom);
 
-    // 2. AI isteğini başlat (Hangi odada olduğumuzu 'currentRoom' ile kilitliyoruz)
+    // 2. AI isteğini başlat
     processAIRequest({ message: content }, currentRoom);
+  };
+
+  // --- YENİ: GÖREV TAMAMLAMA FONKSİYONU ---
+  const handleTaskCompletion = async (feedbackSummary: string) => {
+    // AI'ya Gizli Sinyal Gönder
+    const systemPrompt = `
+      [SİSTEM BİLGİSİ: Kullanıcı verilen gölge görevlerini tamamladı ve şu notları düştü:
+      ${feedbackSummary}
+      
+      TALİMAT: Artık "Yüzleşme/Sorgulama" aşamasını bitir. "ENTEGRASYON/REHBERLİK" aşamasına geç.
+      Kullanıcının notlarını analiz et. Zorlandığı yerleri şefkatle ama gerçekçi bir dille yorumla.
+      Artık onu karanlıkta bırakma, tünelin ucundaki ışığı göster. Daha yapıcı, daha bilge bir tona bürün.]
+    `;
+
+    // AI isteğini başlat (Arka planda)
+    await processAIRequest({ message: systemPrompt }, currentRoom);
   };
 
   useEffect(() => {
@@ -175,7 +189,17 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
 
           {messages.map((message, index) => {
             const reportData = message.sender === 'ai' ? parseShadowReport(message.content) : null;
-            if (reportData) return <ShadowCard key={message.id} data={reportData} />;
+            
+            if (reportData) {
+              return (
+                <ShadowCard 
+                  key={message.id} 
+                  data={reportData} 
+                  onComplete={handleTaskCompletion} // <--- BAĞLANTI BURADA YAPILDI
+                />
+              );
+            }
+
             return <MessageBubble key={message.id} message={message} index={index} />;
           })}
 
