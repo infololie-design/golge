@@ -32,8 +32,22 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sessionId = useRef(getSessionId());
   
-  // Hangi odaların başlatıldığını takip etmek için (Tekrar tekrar "Merhaba" demesin)
+  // Hangi odaların başlatıldığını takip etmek için
   const initializedRooms = useRef<Set<string>>(new Set());
+
+  // --- GÜVENLİK: ZAMAN AŞIMI FONKSİYONU (Bunu geri ekledik!) ---
+  const fetchWithTimeout = async (url: string, options: RequestInit, timeout = 20000) => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(id);
+      return response;
+    } catch (error) {
+      clearTimeout(id);
+      throw error;
+    }
+  };
 
   // --- ODA DEĞİŞİMİ VE YÜKLEME MANTIĞI ---
   useEffect(() => {
@@ -42,7 +56,6 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
     setMessages(roomMessages);
 
     // 2. Eğer bu oda daha önce hiç konuşulmamışsa (Boşsa) -> AI'yı Başlat
-    // initializedRooms kontrolü: Kullanıcı sayfayı yenilemeden odalar arası gezerse tekrar tetiklenmesin
     if (roomMessages.length === 0 && !initializedRooms.current.has(currentRoom)) {
       initializedRooms.current.add(currentRoom);
       
@@ -60,7 +73,7 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
     try {
       const systemMessage = `[SİSTEM: Kullanıcı '${room}' odasına geçti. Konuyu buna göre değiştir ve sert bir giriş sorusu sor.]`;
       
-      const response = await fetch(N8N_WEBHOOK_URL, {
+      const response = await fetchWithTimeout(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: systemMessage, sessionId: sessionId.current }),
@@ -85,7 +98,6 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
       });
     } catch (error) {
       console.error('Room intro error:', error);
-      // Hata olsa bile boş bırakma, kullanıcı yazabilsin
     } finally {
       setIsLoading(false);
     }
@@ -95,7 +107,7 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
   const fetchInitialMessage = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(N8N_WEBHOOK_URL, {
+      const response = await fetchWithTimeout(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: '/start', sessionId: sessionId.current }),
@@ -141,7 +153,7 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch(N8N_WEBHOOK_URL, {
+      const response = await fetchWithTimeout(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: content, sessionId: sessionId.current }),
