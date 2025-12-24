@@ -38,13 +38,52 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
   // Hangi odaların başlatıldığını takip etmek için
   const initializedRooms = useRef<Set<string>>(new Set());
 
+  // Son işlem zamanını takip et (Arka plan kontrolü için)
+  const lastActivityTime = useRef<number>(Date.now());
+
   // Oda her değiştiğinde Ref'i güncelle
   useEffect(() => {
     currentRoomRef.current = currentRoom;
   }, [currentRoom]);
 
+  // --- YENİ: ARKA PLAN / GÖRÜNÜRLÜK KONTROLÜ ---
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Kullanıcı ekrana geri döndü
+        const now = Date.now();
+        const timeDiff = now - lastActivityTime.current;
+
+        // Eğer 10 saniyeden fazla arka planda kaldıysa ve hala yükleniyor görünüyorsa
+        if (isLoading && timeDiff > 10000) {
+          setIsLoading(false);
+          // Kullanıcıya uyarı mesajı ekle
+          const errorMessage: Message = {
+            id: crypto.randomUUID(),
+            content: '⚠️ Uygulama arka planda kaldığı için bağlantı koptu. Lütfen son mesajınızı tekrar gönderin.',
+            sender: 'ai',
+            timestamp: new Date(),
+          };
+          setMessages(prev => {
+            const updated = [...prev, errorMessage];
+            saveMessages(updated, currentRoomRef.current);
+            return updated;
+          });
+        }
+      } else {
+        // Kullanıcı arka plana gitti, zamanı kaydet
+        lastActivityTime.current = Date.now();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isLoading]); // isLoading değişince listener güncellenir
+
   // --- ZAMAN AŞIMI ---
-  const fetchWithTimeout = async (url: string, options: RequestInit, timeout = 30000) => {
+  const fetchWithTimeout = async (url: string, options: RequestInit, timeout = 40000) => {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
     try {
@@ -59,14 +98,10 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
 
   // --- ODA DEĞİŞİMİ ---
   useEffect(() => {
-    // 1. Yeni odanın mesajlarını yükle
     const roomMessages = loadMessages(currentRoom);
     setMessages(roomMessages);
-    
-    // Oda değiştiğinde loading'i kapat
     setIsLoading(false);
 
-    // 2. Oda boşsa AI'yı başlat
     if (roomMessages.length === 0 && !initializedRooms.current.has(currentRoom)) {
       initializedRooms.current.add(currentRoom);
       if (currentRoom === 'yuzlesme') {
@@ -77,11 +112,11 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
     }
   }, [currentRoom]);
 
-  // --- MERKEZİ AI İŞLEME FONKSİYONU (ARKA PLAN DESTEKLİ) ---
+  // --- MERKEZİ AI İŞLEME ---
   const processAIRequest = async (payload: any, targetRoom: string) => {
-    // Eğer kullanıcı şu an bu odadaysa loading göster
     if (currentRoomRef.current === targetRoom) {
       setIsLoading(true);
+      lastActivityTime.current = Date.now(); // İşlem başlangıç zamanını kaydet
     }
 
     try {
@@ -102,17 +137,10 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
         timestamp: new Date(),
       };
 
-      // --- ARKA PLAN KAYDI ---
-      // 1. Hedef odanın EN GÜNCEL mesajlarını depodan çek
       const currentStoredMessages = loadMessages(targetRoom);
-      
-      // 2. Yeni mesajı ekle
       const updatedMessages = [...currentStoredMessages, aiMessage];
-      
-      // 3. Depoya kaydet
       saveMessages(updatedMessages, targetRoom);
 
-      // 4. EĞER kullanıcı hala o odadaysa, ekranı da güncelle
       if (currentRoomRef.current === targetRoom) {
         setMessages(updatedMessages);
         setIsLoading(false);
@@ -122,6 +150,14 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
       console.error('AI Process Error:', error);
       if (currentRoomRef.current === targetRoom) {
         setIsLoading(false);
+        // Hata durumunda kullanıcıya bilgi ver
+        const errorMessage: Message = {
+          id: crypto.randomUUID(),
+          content: 'Bağlantı hatası oluştu. Lütfen tekrar deneyin.',
+          sender: 'ai',
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, errorMessage]);
       }
     }
   };
@@ -143,18 +179,14 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
       timestamp: new Date(),
     };
 
-    // 1. Kullanıcı mesajını hemen ekrana bas ve kaydet
     const tempMessages = [...messages, userMessage];
     setMessages(tempMessages);
     saveMessages(tempMessages, currentRoom);
 
-    // 2. AI isteğini başlat
     processAIRequest({ message: content }, currentRoom);
   };
 
-  // --- YENİ: GÖREV TAMAMLAMA FONKSİYONU ---
   const handleTaskCompletion = async (feedbackSummary: string) => {
-    // AI'ya Gizli Sinyal Gönder
     const systemPrompt = `
       [SİSTEM BİLGİSİ: Kullanıcı verilen gölge görevlerini tamamladı ve şu notları düştü:
       ${feedbackSummary}
@@ -163,8 +195,6 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
       Kullanıcının notlarını analiz et. Zorlandığı yerleri şefkatle ama gerçekçi bir dille yorumla.
       Artık onu karanlıkta bırakma, tünelin ucundaki ışığı göster. Daha yapıcı, daha bilge bir tona bürün.]
     `;
-
-    // AI isteğini başlat (Arka planda)
     await processAIRequest({ message: systemPrompt }, currentRoom);
   };
 
@@ -195,7 +225,7 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
                 <ShadowCard 
                   key={message.id} 
                   data={reportData} 
-                  onComplete={handleTaskCompletion} // <--- BAĞLANTI BURADA YAPILDI
+                  onComplete={handleTaskCompletion} 
                 />
               );
             }
