@@ -13,6 +13,7 @@ interface ChatContainerProps {
   currentRoom: RoomType;
 }
 
+// JSON Algılama Fonksiyonu
 const parseShadowReport = (content: string) => {
   try {
     const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -31,10 +32,10 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sessionId = useRef(getSessionId());
   
-  // YENİ: Anlık oda takibi için Ref (State yerine Ref kullanıyoruz ki her an güncel olsun)
+  // Anlık oda takibi için Ref
   const currentRoomRef = useRef<RoomType>(currentRoom);
   
-  const abortControllerRef = useRef<AbortController | null>(null);
+  // Hangi odaların başlatıldığını takip etmek için
   const initializedRooms = useRef<Set<string>>(new Set());
 
   // Oda her değiştiğinde Ref'i güncelle
@@ -42,19 +43,31 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
     currentRoomRef.current = currentRoom;
   }, [currentRoom]);
 
+  // --- ZAMAN AŞIMI (İptal etme özelliği yok, sadece timeout var) ---
+  const fetchWithTimeout = async (url: string, options: RequestInit, timeout = 30000) => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(id);
+      return response;
+    } catch (error) {
+      clearTimeout(id);
+      throw error;
+    }
+  };
+
   // --- ODA DEĞİŞİMİ ---
   useEffect(() => {
-    // 1. Önceki isteği iptal et
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-
-    // 2. Mesajları yükle
+    // 1. Yeni odanın mesajlarını yükle
     const roomMessages = loadMessages(currentRoom);
     setMessages(roomMessages);
+    
+    // Oda değiştiğinde loading'i kapat (Eğer önceki odada loading kaldıysa)
+    // Not: Arka plandaki işlem devam eder, sadece bu ekrandaki dönen tekerlek durur.
     setIsLoading(false);
 
-    // 3. Oda boşsa AI'yı başlat
+    // 2. Oda boşsa AI'yı başlat
     if (roomMessages.length === 0 && !initializedRooms.current.has(currentRoom)) {
       initializedRooms.current.add(currentRoom);
       if (currentRoom === 'yuzlesme') {
@@ -65,32 +78,23 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
     }
   }, [currentRoom]);
 
-  // --- GÜVENLİ FETCH FONKSİYONU ---
-  const fetchAI = async (payload: any, targetRoom: string) => {
-    // Yeni iptal kumandası
-    abortControllerRef.current = new AbortController();
-    const signal = abortControllerRef.current.signal;
-
-    setIsLoading(true);
+  // --- MERKEZİ AI İŞLEME FONKSİYONU (ARKA PLAN DESTEKLİ) ---
+  const processAIRequest = async (payload: any, targetRoom: string) => {
+    // Eğer kullanıcı şu an bu odadaysa loading göster
+    if (currentRoomRef.current === targetRoom) {
+      setIsLoading(true);
+    }
 
     try {
-      const response = await fetch(N8N_WEBHOOK_URL, {
+      const response = await fetchWithTimeout(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...payload, sessionId: sessionId.current }),
-        signal: signal,
       });
 
       if (!response.ok) throw new Error('Network error');
       const data: ApiResponse = await response.json();
       const aiResponse = data.response || data.message || '...';
-
-      // --- KRİTİK GÜVENLİK KONTROLÜ ---
-      // Cevap geldiğinde, kullanıcı hala isteği attığı odada mı?
-      if (currentRoomRef.current !== targetRoom) {
-        console.log(`İstek iptal edildi: Kullanıcı ${targetRoom} odasından ${currentRoomRef.current} odasına geçti.`);
-        return; // HİÇBİR ŞEY YAPMA, DUR.
-      }
 
       const aiMessage: Message = {
         id: crypto.randomUUID(),
@@ -99,20 +103,25 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
         timestamp: new Date(),
       };
 
-      setMessages(prev => {
-        const updated = [...prev, aiMessage];
-        saveMessages(updated, targetRoom);
-        return updated;
-      });
+      // --- KRİTİK NOKTA: ARKA PLAN KAYDI ---
+      // 1. Hedef odanın EN GÜNCEL mesajlarını depodan çek (State'den değil!)
+      // Çünkü kullanıcı o sırada başka odada olabilir, State başka odayı gösteriyor olabilir.
+      const currentStoredMessages = loadMessages(targetRoom);
+      
+      // 2. Yeni mesajı ekle
+      const updatedMessages = [...currentStoredMessages, aiMessage];
+      
+      // 3. Depoya kaydet (Sessizce)
+      saveMessages(updatedMessages, targetRoom);
 
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        console.log('Fetch aborted cleanly.');
-      } else {
-        console.error('Fetch error:', error);
+      // 4. EĞER kullanıcı hala o odadaysa, ekranı da güncelle
+      if (currentRoomRef.current === targetRoom) {
+        setMessages(updatedMessages);
+        setIsLoading(false);
       }
-    } finally {
-      // Sadece hala aynı odadaysak loading'i kapat
+
+    } catch (error) {
+      console.error('AI Process Error:', error);
       if (currentRoomRef.current === targetRoom) {
         setIsLoading(false);
       }
@@ -121,11 +130,11 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
 
   const triggerRoomIntro = (room: string) => {
     const systemMessage = `[SİSTEM: Kullanıcı '${room}' odasına geçti. Konuyu buna göre değiştir ve sert bir giriş sorusu sor.]`;
-    fetchAI({ message: systemMessage }, room);
+    processAIRequest({ message: systemMessage }, room);
   };
 
   const fetchInitialMessage = () => {
-    fetchAI({ message: '/start' }, 'yuzlesme');
+    processAIRequest({ message: '/start' }, 'yuzlesme');
   };
 
   const sendMessage = async (content: string) => {
@@ -136,13 +145,13 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
       timestamp: new Date(),
     };
 
-    // Mesajı hemen ekle
+    // 1. Kullanıcı mesajını hemen ekrana bas ve kaydet
     const tempMessages = [...messages, userMessage];
     setMessages(tempMessages);
     saveMessages(tempMessages, currentRoom);
 
-    // AI isteğini başlat
-    fetchAI({ message: content }, currentRoom);
+    // 2. AI isteğini başlat (Hangi odada olduğumuzu 'currentRoom' ile kilitliyoruz)
+    processAIRequest({ message: content }, currentRoom);
   };
 
   useEffect(() => {
@@ -151,6 +160,7 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
 
   return (
     <div className="flex flex-col h-[100dvh] w-full md:ml-0 bg-gradient-to-b from-black via-gray-950 to-black">
+      
       <div className="flex-1 overflow-y-auto pt-32 pb-48 px-4 scroll-smooth overscroll-contain">
         <div className="max-w-4xl mx-auto space-y-6">
           {messages.length === 0 && !isLoading && (
@@ -173,6 +183,7 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
           <div ref={messagesEndRef} className="h-4" />
         </div>
       </div>
+
       <ChatInput onSend={sendMessage} disabled={isLoading} />
     </div>
   );
