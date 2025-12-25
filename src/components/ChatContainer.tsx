@@ -1,17 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
 import { Message, ApiResponse, RoomType } from '../types';
-import { saveMessages, loadMessages } from '../utils/sessionManager'; // getSessionId sildik
+import { saveMessages } from '../utils/sessionManager';
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { ChatInput } from './ChatInput';
 import { ShadowCard } from './ShadowCard';
 import { motion } from 'framer-motion';
+import { supabase } from '../lib/supabase'; // Supabase eklendi
+import { simpleDecrypt } from '../utils/encryption'; // Şifre çözücü eklendi
 
 const N8N_WEBHOOK_URL = 'https://n8n.lolie.com.tr/webhook/61faf25c-aab1-4246-adfe-2caa274fb839';
 
 interface ChatContainerProps {
   currentRoom: RoomType;
-  userId: string; // <--- YENİ: Artık dışarıdan gerçek ID alıyoruz
+  userId: string;
 }
 
 const parseShadowReport = (content: string) => {
@@ -31,7 +33,6 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  // ARTIK SESSION ID OLARAK GERÇEK USER ID KULLANIYORUZ
   const sessionId = userId; 
   
   const currentRoomRef = useRef<RoomType>(currentRoom);
@@ -56,11 +57,7 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
             sender: 'ai',
             timestamp: new Date(),
           };
-          setMessages(prev => {
-            const updated = [...prev, errorMessage];
-            saveMessages(updated, currentRoomRef.current);
-            return updated;
-          });
+          setMessages(prev => [...prev, errorMessage]);
         }
       } else {
         lastActivityTime.current = Date.now();
@@ -83,21 +80,59 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
     }
   };
 
-  // --- ODA DEĞİŞİMİ ---
+  // --- ODA DEĞİŞİMİ VE GEÇMİŞİ YÜKLEME (BULUTTAN) ---
   useEffect(() => {
-    const roomMessages = loadMessages(currentRoom);
-    setMessages(roomMessages);
-    setIsLoading(false);
+    const loadHistoryFromCloud = async () => {
+      setIsLoading(true);
+      setMessages([]); // Önce temizle
 
-    if (roomMessages.length === 0 && !initializedRooms.current.has(currentRoom)) {
-      initializedRooms.current.add(currentRoom);
-      if (currentRoom === 'yuzlesme') {
-        fetchInitialMessage();
-      } else {
-        triggerRoomIntro(currentRoom);
+      try {
+        // 1. Supabase'den verileri çek
+        // Sadece bu kullanıcının verilerini çek (RLS zaten koruyor ama biz yine de filtreleyelim)
+        const { data, error } = await supabase
+          .from('chat_history')
+          .select('*')
+          .eq('user_id', userId) 
+          .order('created_at', { ascending: true });
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          // 2. Verileri işle ve şifrelerini çöz
+          const historyMessages: Message[] = data.map((item: any) => ({
+            id: item.id.toString(),
+            content: simpleDecrypt(item.content), // Şifreyi çöz
+            sender: item.role === 'user' ? 'user' : 'ai', // Rolü eşleştir
+            timestamp: new Date(item.created_at)
+          }));
+
+          // 3. Sadece şu anki odanın mesajlarını filtrele?
+          // NOT: Şu an veritabanında "hangi oda" bilgisi yok. 
+          // O yüzden tüm geçmişi getiriyoruz. İleride "room" sütunu ekleyebiliriz.
+          // Şimdilik tüm akışı gösteriyoruz, bu da bir "Yolculuk" hissi verir.
+          setMessages(historyMessages);
+          
+          // Eğer hiç mesaj yoksa (Yeni kullanıcı) -> Başlat
+        } else {
+           if (!initializedRooms.current.has(currentRoom)) {
+            initializedRooms.current.add(currentRoom);
+            if (currentRoom === 'yuzlesme') {
+              fetchInitialMessage();
+            } else {
+              triggerRoomIntro(currentRoom);
+            }
+          }
+        }
+
+      } catch (err) {
+        console.error("Geçmiş yüklenirken hata:", err);
+      } finally {
+        setIsLoading(false);
       }
-    }
-  }, [currentRoom]);
+    };
+
+    loadHistoryFromCloud();
+  }, [currentRoom, userId]); // Oda veya Kullanıcı değişince çalış
 
   const processAIRequest = async (payload: any, targetRoom: string) => {
     if (currentRoomRef.current === targetRoom) {
@@ -109,7 +144,7 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
       const response = await fetchWithTimeout(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payload, sessionId: sessionId }), // <-- BURADA userId GİDİYOR
+        body: JSON.stringify({ ...payload, sessionId: sessionId }),
       });
 
       if (!response.ok) throw new Error('Network error');
@@ -123,12 +158,9 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
         timestamp: new Date(),
       };
 
-      const currentStoredMessages = loadMessages(targetRoom);
-      const updatedMessages = [...currentStoredMessages, aiMessage];
-      saveMessages(updatedMessages, targetRoom);
-
+      // Ekrana bas (Kaydetme işini zaten n8n yapıyor)
       if (currentRoomRef.current === targetRoom) {
-        setMessages(updatedMessages);
+        setMessages(prev => [...prev, aiMessage]);
         setIsLoading(false);
       }
 
@@ -164,10 +196,10 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
       timestamp: new Date(),
     };
 
-    const tempMessages = [...messages, userMessage];
-    setMessages(tempMessages);
-    saveMessages(tempMessages, currentRoom);
-
+    // Mesajı ekrana bas
+    setMessages(prev => [...prev, userMessage]);
+    
+    // AI isteğini başlat
     processAIRequest({ message: content }, currentRoom);
   };
 
