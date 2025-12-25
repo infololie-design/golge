@@ -22,29 +22,33 @@ export interface ChatContainerHandle {
   triggerModeSwitch: (newMode: boolean) => void;
 }
 
-// --- JSON AYIKLAYICI (CIMBIZ) ---
+// --- GÜÇLENDİRİLMİŞ JSON DEDEKTİFİ (CIMBIZ) ---
 const parseShadowReport = (content: string) => {
   try {
-    const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
+    // 1. Önce Markdown kod bloklarını temizle
+    let cleanContent = content.replace(/```json/g, '').replace(/```/g, '');
+    
+    // 2. İçinde JSON parçasını bul (Süslü parantezlerin arasını al)
+    // Regex: { ile başla, içinde "type": "shadow_report" geçsin, } ile bit.
     const jsonMatch = cleanContent.match(/\{[\s\S]*"type":\s*"shadow_report"[\s\S]*\}/);
+    
     if (jsonMatch) {
+      // Bulunan JSON parçasını parse et
       return JSON.parse(jsonMatch[0]);
     }
   } catch (e) {
+    // Hata olursa (JSON bozuksa) sessizce null dön, normal mesaj olarak göster
     return null;
   }
   return null;
 };
 
-// --- YENİ: GÖREV DURUMLARINI ÇÖZÜMLE ---
-// Bu fonksiyon, kullanıcının kaydettiği rapordan hangi görevleri yaptığını anlar.
+// --- GÖREV DURUMLARINI ÇÖZÜMLE ---
 const parseTaskStatus = (reportContent: string) => {
-  const tasksStatus = [false, false, false]; // Varsayılan: Hepsi yapılmadı
-  
+  const tasksStatus = [false, false, false]; 
   if (reportContent.includes('Görev 1: YAPILDI')) tasksStatus[0] = true;
   if (reportContent.includes('Görev 2: YAPILDI')) tasksStatus[1] = true;
   if (reportContent.includes('Görev 3: YAPILDI')) tasksStatus[2] = true;
-  
   return tasksStatus;
 };
 
@@ -72,7 +76,6 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
     }
   }));
 
-  // --- GÖRÜNÜRLÜK KONTROLÜ (ARKA PLAN KORUMASI) ---
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -110,7 +113,6 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
     }
   };
 
-  // --- ODA DEĞİŞİMİ VE GEÇMİŞİ YÜKLEME ---
   useEffect(() => {
     const loadHistoryFromCloud = async () => {
       setIsLoading(true);
@@ -134,7 +136,6 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
             sender: item.role === 'user' ? 'user' : 'ai',
             timestamp: new Date(item.created_at)
           }))
-          // Sistem mesajlarını gizle ama Görev Raporlarını TUT (Dedektif için lazım)
           .filter((msg: Message) => !msg.content.includes('[SİSTEM'));
 
           setMessages(historyMessages);
@@ -302,17 +303,14 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
           {messages.map((message, index) => {
             const reportData = message.sender === 'ai' ? parseShadowReport(message.content) : null;
             
-            // Görev raporu metnini ekranda GİZLE (Ama kod okuyabilsin diye listede tutuyoruz)
             if (message.content.includes('📝 **GÖREV RAPORU:**')) {
               return null;
             }
 
             if (reportData) {
-              // Dedektif: Bir sonraki mesaja bak, eğer Görev Raporu ise kartı yeşil yap.
               const nextMessage = messages[index + 1];
               const isCompleted = nextMessage?.content.includes('📝 **GÖREV RAPORU:**');
               
-              // YENİ: Hangi görevlerin yapıldığını analiz et
               const completedTasks = isCompleted ? parseTaskStatus(nextMessage.content) : undefined;
 
               return (
@@ -321,7 +319,7 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
                   data={reportData} 
                   onComplete={handleTaskCompletion}
                   isCompleted={isCompleted} 
-                  initialTaskStatus={completedTasks} // <--- YENİ PROP
+                  initialTaskStatus={completedTasks} 
                 />
               );
             }
