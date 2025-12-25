@@ -22,35 +22,30 @@ export interface ChatContainerHandle {
   triggerModeSwitch: (newMode: boolean) => void;
 }
 
-// --- DÜZELTİLEN KISIM: MANUEL JSON AYIKLAYICI ---
+// --- JSON AYIKLAYICI (CIMBIZ) ---
 const parseShadowReport = (content: string) => {
   try {
-    // 1. Markdown kod bloklarını temizle
-    const cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
-    
-    // 2. İlk süslü parantezi bul
-    const startIndex = cleanContent.indexOf('{');
-    // 3. Son süslü parantezi bul
-    const endIndex = cleanContent.lastIndexOf('}');
-    
-    // Eğer parantezler varsa ve mantıklı bir sıradaysa
-    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-      // 4. Aradaki metni çekip al
-      const jsonStr = cleanContent.substring(startIndex, endIndex + 1);
-      
-      // 5. JSON'a çevir
-      const parsed = JSON.parse(jsonStr);
-      
-      // 6. Tip kontrolü yap
-      if (parsed.type === 'shadow_report') {
-        return parsed;
-      }
+    const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
+    const jsonMatch = cleanContent.match(/\{[\s\S]*"type":\s*"shadow_report"[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
     }
   } catch (e) {
-    // JSON bozuksa sessizce null dön (Normal mesaj olarak gösterilir)
     return null;
   }
   return null;
+};
+
+// --- YENİ: GÖREV DURUMLARINI ÇÖZÜMLE ---
+// Bu fonksiyon, kullanıcının kaydettiği rapordan hangi görevleri yaptığını anlar.
+const parseTaskStatus = (reportContent: string) => {
+  const tasksStatus = [false, false, false]; // Varsayılan: Hepsi yapılmadı
+  
+  if (reportContent.includes('Görev 1: YAPILDI')) tasksStatus[0] = true;
+  if (reportContent.includes('Görev 2: YAPILDI')) tasksStatus[1] = true;
+  if (reportContent.includes('Görev 3: YAPILDI')) tasksStatus[2] = true;
+  
+  return tasksStatus;
 };
 
 export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>(({ currentRoom, userId, isSafeMode, onProgressUpdate }, ref) => {
@@ -77,6 +72,7 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
     }
   }));
 
+  // --- GÖRÜNÜRLÜK KONTROLÜ (ARKA PLAN KORUMASI) ---
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -114,6 +110,7 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
     }
   };
 
+  // --- ODA DEĞİŞİMİ VE GEÇMİŞİ YÜKLEME ---
   useEffect(() => {
     const loadHistoryFromCloud = async () => {
       setIsLoading(true);
@@ -137,6 +134,7 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
             sender: item.role === 'user' ? 'user' : 'ai',
             timestamp: new Date(item.created_at)
           }))
+          // Sistem mesajlarını gizle ama Görev Raporlarını TUT (Dedektif için lazım)
           .filter((msg: Message) => !msg.content.includes('[SİSTEM'));
 
           setMessages(historyMessages);
@@ -301,53 +299,20 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
             </motion.div>
           )}
 
-         // ... (Diğer importlar ve kodlar aynı)
-
-// --- YARDIMCI FONKSİYON: GÖREV DURUMLARINI ÇÖZÜMLE ---
-const parseTaskStatus = (reportContent: string) => {
-  const tasksStatus = [false, false, false]; // Varsayılan: Hepsi yapılmadı
-  
-  // Metnin içinde "Görev 1: YAPILDI" gibi ifadeleri ara
-  if (reportContent.includes('Görev 1: YAPILDI')) tasksStatus[0] = true;
-  if (reportContent.includes('Görev 2: YAPILDI')) tasksStatus[1] = true;
-  if (reportContent.includes('Görev 3: YAPILDI')) tasksStatus[2] = true;
-  
-  return tasksStatus;
-};
-
-export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>(({ currentRoom, userId, isSafeMode, onProgressUpdate }, ref) => {
-  // ... (State ve useEffect'ler aynı) ...
-
-  // ... (Diğer fonksiyonlar aynı) ...
-
-  return (
-    <div className={`flex flex-col h-[100dvh] w-full md:ml-0 transition-colors duration-500 ${isSafeMode ? 'bg-slate-950' : 'bg-gradient-to-b from-black via-gray-950 to-black'}`}>
-      
-      <div className="flex-1 overflow-y-auto pt-32 pb-48 px-4 scroll-smooth overscroll-contain">
-        <div className="max-w-4xl mx-auto space-y-6">
-          
-          {messages.length === 0 && !isLoading && !isRoomInitializing && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex items-center justify-center h-full text-gray-600 text-center mt-10"
-            >
-              <p>Karanlığa hoş geldiniz...</p>
-            </motion.div>
-          )}
-
           {messages.map((message, index) => {
             const reportData = message.sender === 'ai' ? parseShadowReport(message.content) : null;
             
+            // Görev raporu metnini ekranda GİZLE (Ama kod okuyabilsin diye listede tutuyoruz)
             if (message.content.includes('📝 **GÖREV RAPORU:**')) {
               return null;
             }
 
             if (reportData) {
+              // Dedektif: Bir sonraki mesaja bak, eğer Görev Raporu ise kartı yeşil yap.
               const nextMessage = messages[index + 1];
               const isCompleted = nextMessage?.content.includes('📝 **GÖREV RAPORU:**');
               
-              // YENİ: Eğer tamamlandıysa, hangi görevlerin yapıldığını bul
+              // YENİ: Hangi görevlerin yapıldığını analiz et
               const completedTasks = isCompleted ? parseTaskStatus(nextMessage.content) : undefined;
 
               return (
@@ -355,7 +320,7 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
                   key={message.id} 
                   data={reportData} 
                   onComplete={handleTaskCompletion}
-                  isCompleted={isCompleted}
+                  isCompleted={isCompleted} 
                   initialTaskStatus={completedTasks} // <--- YENİ PROP
                 />
               );
