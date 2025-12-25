@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Message, ApiResponse, RoomType } from '../types';
 import { saveMessages, loadMessages } from '../utils/sessionManager';
 import { MessageBubble } from './MessageBubble';
@@ -14,7 +14,11 @@ const N8N_WEBHOOK_URL = 'https://n8n.lolie.com.tr/webhook/61faf25c-aab1-4246-adf
 interface ChatContainerProps {
   currentRoom: RoomType;
   userId: string;
-  isSafeMode: boolean; // YENİ PROP
+  isSafeMode: boolean;
+}
+
+export interface ChatContainerHandle {
+  triggerModeSwitch: (newMode: boolean) => void; // İsim değişti
 }
 
 const parseShadowReport = (content: string) => {
@@ -29,7 +33,7 @@ const parseShadowReport = (content: string) => {
   return null;
 };
 
-export const ChatContainer = ({ currentRoom, userId, isSafeMode }: ChatContainerProps) => {
+export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>(({ currentRoom, userId, isSafeMode }, ref) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -42,6 +46,19 @@ export const ChatContainer = ({ currentRoom, userId, isSafeMode }: ChatContainer
   useEffect(() => {
     currentRoomRef.current = currentRoom;
   }, [currentRoom]);
+
+  // --- DIŞARIYA AÇILAN KAPI (MOD DEĞİŞİMİ) ---
+  useImperativeHandle(ref, () => ({
+    triggerModeSwitch: (newMode: boolean) => {
+      // Mod değiştiğinde AI'ya gizli sinyal gönder
+      const systemPrompt = newMode 
+        ? `[SİSTEM: MOD DEĞİŞTİ - GÜVENLİ MODA GEÇİLDİ]` 
+        : `[SİSTEM: MOD DEĞİŞTİ - GÖLGE MODUNA DÖNÜLDÜ]`;
+      
+      // İsteği gönder (State'deki isSafeMode henüz güncellenmemiş olabilir, o yüzden parametreyi kullanıyoruz)
+      processAIRequest({ message: systemPrompt, mode: newMode ? 'safe' : 'shadow' }, currentRoom);
+    }
+  }));
 
   // --- GÖRÜNÜRLÜK KONTROLÜ ---
   useEffect(() => {
@@ -80,7 +97,6 @@ export const ChatContainer = ({ currentRoom, userId, isSafeMode }: ChatContainer
     }
   };
 
-  // --- ODA DEĞİŞİMİ VE GEÇMİŞİ YÜKLEME ---
   useEffect(() => {
     const loadHistoryFromCloud = async () => {
       setIsLoading(true);
@@ -138,12 +154,12 @@ export const ChatContainer = ({ currentRoom, userId, isSafeMode }: ChatContainer
       const response = await fetchWithTimeout(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // YENİ: mode bilgisini gönderiyoruz
+        // Payload içindeki mode varsa onu kullan, yoksa prop'tan al
         body: JSON.stringify({ 
           ...payload, 
           sessionId: sessionId, 
           room: targetRoom,
-          mode: isSafeMode ? 'safe' : 'shadow' // <--- MOD BİLGİSİ
+          mode: payload.mode || (isSafeMode ? 'safe' : 'shadow') 
         }), 
       });
 
@@ -270,4 +286,4 @@ export const ChatContainer = ({ currentRoom, userId, isSafeMode }: ChatContainer
       <ChatInput onSend={sendMessage} disabled={isLoading} />
     </div>
   );
-};
+});
