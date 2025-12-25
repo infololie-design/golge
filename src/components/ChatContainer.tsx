@@ -301,6 +301,41 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
             </motion.div>
           )}
 
+         // ... (Diğer importlar ve kodlar aynı)
+
+// --- YARDIMCI FONKSİYON: GÖREV DURUMLARINI ÇÖZÜMLE ---
+const parseTaskStatus = (reportContent: string) => {
+  const tasksStatus = [false, false, false]; // Varsayılan: Hepsi yapılmadı
+  
+  // Metnin içinde "Görev 1: YAPILDI" gibi ifadeleri ara
+  if (reportContent.includes('Görev 1: YAPILDI')) tasksStatus[0] = true;
+  if (reportContent.includes('Görev 2: YAPILDI')) tasksStatus[1] = true;
+  if (reportContent.includes('Görev 3: YAPILDI')) tasksStatus[2] = true;
+  
+  return tasksStatus;
+};
+
+export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>(({ currentRoom, userId, isSafeMode, onProgressUpdate }, ref) => {
+  // ... (State ve useEffect'ler aynı) ...
+
+  // ... (Diğer fonksiyonlar aynı) ...
+
+  return (
+    <div className={`flex flex-col h-[100dvh] w-full md:ml-0 transition-colors duration-500 ${isSafeMode ? 'bg-slate-950' : 'bg-gradient-to-b from-black via-gray-950 to-black'}`}>
+      
+      <div className="flex-1 overflow-y-auto pt-32 pb-48 px-4 scroll-smooth overscroll-contain">
+        <div className="max-w-4xl mx-auto space-y-6">
+          
+          {messages.length === 0 && !isLoading && !isRoomInitializing && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-center justify-center h-full text-gray-600 text-center mt-10"
+            >
+              <p>Karanlığa hoş geldiniz...</p>
+            </motion.div>
+          )}
+
           {messages.map((message, index) => {
             const reportData = message.sender === 'ai' ? parseShadowReport(message.content) : null;
             
@@ -311,13 +346,17 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
             if (reportData) {
               const nextMessage = messages[index + 1];
               const isCompleted = nextMessage?.content.includes('📝 **GÖREV RAPORU:**');
+              
+              // YENİ: Eğer tamamlandıysa, hangi görevlerin yapıldığını bul
+              const completedTasks = isCompleted ? parseTaskStatus(nextMessage.content) : undefined;
 
               return (
                 <ShadowCard 
                   key={message.id} 
                   data={reportData} 
                   onComplete={handleTaskCompletion}
-                  isCompleted={isCompleted} 
+                  isCompleted={isCompleted}
+                  initialTaskStatus={completedTasks} // <--- YENİ PROP
                 />
               );
             }
