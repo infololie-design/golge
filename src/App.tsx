@@ -3,7 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { ChatContainer, ChatContainerHandle } from './components/ChatContainer';
 import { Auth } from './components/Auth';
 import { JournalModal } from './components/JournalModal';
-import { AlchemyUnlockedModal } from './components/AlchemyUnlockedModal'; // YENİ
+import { AlchemyUnlockedModal } from './components/AlchemyUnlockedModal';
 import { RoomType, ROOMS } from './types';
 import { Menu, Loader2 } from 'lucide-react';
 import { supabase } from './lib/supabase';
@@ -14,7 +14,6 @@ function App() {
   const [isSafeMode, setIsSafeMode] = useState(false);
   const [showJournal, setShowJournal] = useState(false);
   
-  // YENİ STATE'LER
   const [completedRooms, setCompletedRooms] = useState<string[]>([]);
   const [showAlchemyModal, setShowAlchemyModal] = useState(false);
   
@@ -24,21 +23,30 @@ function App() {
   const chatRef = useRef<ChatContainerHandle>(null);
 
   useEffect(() => {
+    // --- SİGORTA: 3 Saniye içinde yanıt gelmezse yüklemeyi durdur ---
+    const timeout = setTimeout(() => {
+      setLoading(false);
+    }, 3000);
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
-      if (session) checkProgress(session.user.id); // Giriş yapınca kontrol et
+      clearTimeout(timeout); // Yanıt geldiyse sigortayı iptal et
+      if (session) checkProgress(session.user.id);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      setLoading(false); // Durum değişince de yüklemeyi kapat
       if (session) checkProgress(session.user.id);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
-  // --- İLERLEME KONTROLÜ ---
   const checkProgress = async (userId: string) => {
     try {
       const { data } = await supabase
@@ -48,13 +56,9 @@ function App() {
 
       if (data) {
         const rooms = data.map(item => item.room_id);
-        
-        // Eğer yeni bir oda tamamlandıysa ve toplam 2 olduysa KUTLAMA YAP
-        // (Daha önce 2'den azsa ve şimdi 2 veya fazlaysa)
         if (completedRooms.length < 2 && rooms.length >= 2) {
           setShowAlchemyModal(true);
         }
-        
         setCompletedRooms(rooms);
       }
     } catch (error) {
@@ -91,7 +95,6 @@ function App() {
   return (
     <div className={`flex h-screen text-white overflow-hidden transition-colors duration-500 ${isSafeMode ? 'bg-slate-950' : 'bg-black'}`}>
       
-      {/* MODALLAR */}
       {showJournal && <JournalModal userId={session.user.id} onClose={() => setShowJournal(false)} />}
       
       {showAlchemyModal && (
@@ -124,7 +127,7 @@ function App() {
           setShowJournal(true);
           setIsSidebarOpen(false);
         }}
-        completedRooms={completedRooms} // Veriyi App'ten alıyor
+        completedRooms={completedRooms}
       />
 
       <main className="flex-1 h-full w-full relative">
@@ -133,7 +136,7 @@ function App() {
           currentRoom={currentRoom} 
           userId={session.user.id} 
           isSafeMode={isSafeMode}
-          onProgressUpdate={() => checkProgress(session.user.id)} // Güncelleme tetikleyici
+          onProgressUpdate={() => checkProgress(session.user.id)}
         />
       </main>
 
