@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, ArrowRight, CheckCircle2, PenLine } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, PenLine, XCircle } from 'lucide-react'; // XCircle eklendi
 
 interface ShadowReport {
   type: string;
@@ -11,23 +11,31 @@ interface ShadowReport {
 interface ShadowCardProps {
   data: ShadowReport;
   onComplete?: (feedback: string) => void;
-  isCompleted?: boolean; // YENİ: Dışarıdan gelen tamamlandı bilgisi
+  isCompleted?: boolean;
+  initialTaskStatus?: boolean[]; // YENİ: Görevlerin durumu (true/false dizisi)
 }
 
-export const ShadowCard: React.FC<ShadowCardProps> = ({ data, onComplete, isCompleted = false }) => {
+export const ShadowCard: React.FC<ShadowCardProps> = ({ data, onComplete, isCompleted = false, initialTaskStatus }) => {
   const [tasks, setTasks] = useState(
-    data.homework.map(task => ({ text: task, completed: false, note: '' }))
+    data.homework.map((task, index) => ({ 
+      text: task, 
+      // Eğer dışarıdan durum geldiyse onu kullan, yoksa false
+      completed: initialTaskStatus ? initialTaskStatus[index] : false, 
+      note: '' 
+    }))
   );
   const [isSubmitted, setIsSubmitted] = useState(isCompleted);
 
-  // Eğer dışarıdan "Tamamlandı" bilgisi gelirse (Sayfa yenilenince), state'i güncelle
   useEffect(() => {
     if (isCompleted) {
       setIsSubmitted(true);
-      // Görsel olarak da hepsini yapılmış gibi gösterelim (Opsiyonel)
-      setTasks(prev => prev.map(t => ({ ...t, completed: true })));
+      // BURASI DEĞİŞTİ: Artık hepsini true yapmıyoruz.
+      // Eğer initialTaskStatus varsa onu kullanıyoruz.
+      if (initialTaskStatus) {
+        setTasks(prev => prev.map((t, i) => ({ ...t, completed: initialTaskStatus[i] })));
+      }
     }
-  }, [isCompleted]);
+  }, [isCompleted, initialTaskStatus]);
 
   const toggleTask = (index: number) => {
     const newTasks = [...tasks];
@@ -86,12 +94,22 @@ export const ShadowCard: React.FC<ShadowCardProps> = ({ data, onComplete, isComp
         
         <div className="space-y-4">
           {tasks.map((task, index) => (
-            <div key={index} className={`p-4 rounded-lg border transition-all ${task.completed || isSubmitted ? 'bg-green-900/10 border-green-900/30' : 'bg-zinc-900/30 border-zinc-800'}`}>
+            <div key={index} className={`p-4 rounded-lg border transition-all ${isSubmitted ? (task.completed ? 'bg-green-900/10 border-green-900/30' : 'bg-red-900/10 border-red-900/30') : 'bg-zinc-900/30 border-zinc-800'}`}>
               <div className="flex items-start gap-3 cursor-pointer" onClick={() => !isSubmitted && toggleTask(index)}>
-                <div className={`mt-1 min-w-[20px] h-5 rounded border flex items-center justify-center transition-colors ${task.completed || isSubmitted ? 'bg-green-600 border-green-600' : 'border-zinc-600'}`}>
-                  {(task.completed || isSubmitted) && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                
+                {/* Checkbox Kutusu */}
+                <div className={`mt-1 min-w-[20px] h-5 rounded border flex items-center justify-center transition-colors 
+                  ${isSubmitted 
+                    ? (task.completed ? 'bg-green-600 border-green-600' : 'bg-red-900/20 border-red-500') 
+                    : (task.completed ? 'bg-green-600 border-green-600' : 'border-zinc-600')
+                  }`}>
+                  
+                  {/* İkonlar: Yapıldıysa Tik, Yapılmadıysa (ve gönderildiyse) Çarpı */}
+                  {task.completed && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                  {!task.completed && isSubmitted && <XCircle className="w-3.5 h-3.5 text-red-500" />}
                 </div>
-                <span className={`text-sm leading-relaxed ${(task.completed || isSubmitted) ? 'text-zinc-400 line-through' : 'text-zinc-200'}`}>
+
+                <span className={`text-sm leading-relaxed ${isSubmitted ? 'text-zinc-400' : 'text-zinc-200'}`}>
                   {task.text}
                 </span>
               </div>
