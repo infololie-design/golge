@@ -19,11 +19,13 @@ function App() {
   
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  
+  // YENİ: Kullanıcı Cinsiyeti (Varsayılan: Kadın)
+  const [userGender, setUserGender] = useState<string>('female');
 
   const chatRef = useRef<ChatContainerHandle>(null);
 
   useEffect(() => {
-    // --- SİGORTA: 3 Saniye içinde yanıt gelmezse yüklemeyi durdur ---
     const timeout = setTimeout(() => {
       setLoading(false);
     }, 3000);
@@ -31,14 +33,25 @@ function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
-      clearTimeout(timeout); // Yanıt geldiyse sigortayı iptal et
-      if (session) checkProgress(session.user.id);
+      clearTimeout(timeout);
+      
+      if (session) {
+        checkProgress(session.user.id);
+        // YENİ: Cinsiyet bilgisini metadata'dan çek
+        // Eğer eski kullanıcıysa ve cinsiyeti yoksa varsayılan 'female' olsun
+        setUserGender(session.user.user_metadata?.gender || 'female');
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      setLoading(false); // Durum değişince de yüklemeyi kapat
-      if (session) checkProgress(session.user.id);
+      setLoading(false);
+      
+      if (session) {
+        checkProgress(session.user.id);
+        // YENİ: Oturum değişince cinsiyeti güncelle
+        setUserGender(session.user.user_metadata?.gender || 'female');
+      }
     });
 
     return () => {
@@ -137,6 +150,7 @@ function App() {
           userId={session.user.id} 
           isSafeMode={isSafeMode}
           onProgressUpdate={() => checkProgress(session.user.id)}
+          userGender={userGender} // <--- YENİ: Cinsiyeti ChatContainer'a gönderiyoruz
         />
       </main>
 
