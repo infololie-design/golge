@@ -16,38 +16,26 @@ interface SidebarProps {
   isSafeMode?: boolean;
   onToggleSafeMode?: () => void;
   onOpenJournal: () => void;
+  completedRooms: string[]; // YENİ: Artık dışarıdan alıyor
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isOpen, onClose, onOpenJournal }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ 
+  currentRoom, 
+  onRoomChange, 
+  isOpen, 
+  onClose, 
+  onOpenJournal,
+  completedRooms // Prop olarak alıyoruz
+}) => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [showAdmin, setShowAdmin] = useState(false);
-  const [completedRooms, setCompletedRooms] = useState<string[]>([]);
   const [showLockedModal, setShowLockedModal] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setUserEmail(user.email || null);
-        checkCompletedRooms(user.id);
-      }
+      if (user) setUserEmail(user.email || null);
     });
-  }, [currentRoom]); 
-
-  const checkCompletedRooms = async (userId: string) => {
-    try {
-      const { data } = await supabase
-        .from('user_progress')
-        .select('room_id')
-        .eq('user_id', userId);
-
-      if (data) {
-        const rooms = data.map(item => item.room_id);
-        setCompletedRooms(rooms);
-      }
-    } catch (error) {
-      console.error('Room check error:', error);
-    }
-  };
+  }, []);
 
   const handleReset = () => {
     if (window.confirm('Tüm konuşma geçmişi ve hafıza silinecek. En başa dönmek istediğine emin misin?')) {
@@ -62,9 +50,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
     }
   };
 
-  // --- DEĞİŞİKLİK BURADA ---
-  // Simya odasının kilidini kontrol et
-  // Kural: En az 2 oda tamamlanmış olmalı
+  // Kilit Kontrolü (Dışarıdan gelen veriye göre)
   const isAlchemyUnlocked = completedRooms.length >= 2; 
 
   return (
@@ -141,11 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
         </div>
 
         <div className="p-6 border-t border-zinc-900 space-y-2">
-          
-          <button 
-            onClick={onOpenJournal}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-900 hover:text-white transition-all mb-2 border border-zinc-800 hover:border-zinc-700"
-          >
+          <button onClick={onOpenJournal} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-900 hover:text-white transition-all mb-2 border border-zinc-800 hover:border-zinc-700">
             <Calendar className="w-5 h-5" />
             <span className="font-medium text-sm">Gölge Günlüğü</span>
           </button>
