@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Message, ApiResponse, RoomType } from '../types';
-import { saveMessages, loadMessages } from '../utils/sessionManager';
+import { saveMessages } from '../utils/sessionManager';
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { ChatInput } from './ChatInput';
@@ -36,7 +36,6 @@ const parseShadowReport = (content: string) => {
 export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>(({ currentRoom, userId, isSafeMode }, ref) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  // YENİ: Odanın ilk yüklenip yüklenmediğini takip eden state
   const [isRoomInitializing, setIsRoomInitializing] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -65,7 +64,7 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
         const timeDiff = now - lastActivityTime.current;
         if (isLoading && timeDiff > 10000) {
           setIsLoading(false);
-          setIsRoomInitializing(false); // Takılı kalırsa kurtar
+          setIsRoomInitializing(false);
           const errorMessage: Message = {
             id: crypto.randomUUID(),
             content: '⚠️ Uygulama arka planda kaldığı için bağlantı koptu. Lütfen son mesajınızı tekrar gönderin.',
@@ -98,7 +97,9 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
   // --- ODA DEĞİŞİMİ VE GEÇMİŞİ YÜKLEME ---
   useEffect(() => {
     const loadHistoryFromCloud = async () => {
+      // 1. Önce her şeyi sıfırla (Takılmayı önler)
       setIsLoading(true);
+      setIsRoomInitializing(false); 
       setMessages([]); 
 
       try {
@@ -121,13 +122,13 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
           .filter((msg: Message) => !msg.content.includes('[SİSTEM'));
 
           setMessages(historyMessages);
-          setIsLoading(false); // Veri varsa yükleme bitti
+          setIsLoading(false); // Veri geldi, yüklemeyi bitir
           
         } else {
-           // Veri yoksa, bu odayı başlatmamız lazım
+           // Veri yok, başlatma gerekiyor mu?
            if (!initializedRooms.current.has(currentRoom)) {
             initializedRooms.current.add(currentRoom);
-            setIsRoomInitializing(true); // YENİ: Başlatma moduna al
+            setIsRoomInitializing(true); // Başlatma modunu aç
             
             if (currentRoom === 'yuzlesme') {
               fetchInitialMessage();
@@ -135,13 +136,14 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
               triggerRoomIntro(currentRoom);
             }
           } else {
-            setIsLoading(false); // Zaten başlatılmış ama boşsa (örn: silinmişse) yüklemeyi bitir
+            setIsLoading(false); // Zaten başlatılmış ama boş, yüklemeyi bitir
           }
         }
 
       } catch (err) {
         console.error("Geçmiş yüklenirken hata:", err);
-        setIsLoading(false);
+        setIsLoading(false); // Hata olsa bile yüklemeyi bitir
+        setIsRoomInitializing(false);
       }
     };
 
@@ -180,14 +182,14 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
       if (currentRoomRef.current === targetRoom) {
         setMessages(prev => [...prev, aiMessage]);
         setIsLoading(false);
-        setIsRoomInitializing(false); // YENİ: Cevap gelince başlatma modu biter
+        setIsRoomInitializing(false); // Cevap gelince başlatma biter
       }
 
     } catch (error) {
       console.error('AI Process Error:', error);
       if (currentRoomRef.current === targetRoom) {
         setIsLoading(false);
-        setIsRoomInitializing(false); // Hata olsa da bitir
+        setIsRoomInitializing(false);
         const errorMessage: Message = {
           id: crypto.randomUUID(),
           content: 'Bağlantı hatası oluştu. Lütfen tekrar deneyin.',
