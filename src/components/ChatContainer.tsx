@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Message, ApiResponse, RoomType } from '../types';
 import { saveMessages, loadMessages } from '../utils/sessionManager';
 import { MessageBubble } from './MessageBubble';
@@ -14,11 +14,7 @@ const N8N_WEBHOOK_URL = 'https://n8n.lolie.com.tr/webhook/61faf25c-aab1-4246-adf
 interface ChatContainerProps {
   currentRoom: RoomType;
   userId: string;
-}
-
-// Dışarıdan çağrılabilir fonksiyonlar için tip tanımı
-export interface ChatContainerHandle {
-  triggerPanicMode: () => void;
+  isSafeMode: boolean; // YENİ PROP
 }
 
 const parseShadowReport = (content: string) => {
@@ -33,8 +29,7 @@ const parseShadowReport = (content: string) => {
   return null;
 };
 
-// forwardRef ile bileşeni sarmalıyoruz
-export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>(({ currentRoom, userId }, ref) => {
+export const ChatContainer = ({ currentRoom, userId, isSafeMode }: ChatContainerProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -47,14 +42,6 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
   useEffect(() => {
     currentRoomRef.current = currentRoom;
   }, [currentRoom]);
-
-  // --- DIŞARIYA AÇILAN KAPI (PANİK MODU) ---
-  useImperativeHandle(ref, () => ({
-    triggerPanicMode: () => {
-      const systemPrompt = `[SİSTEM: PANİK MODU] Kullanıcı nefes alanı butonuna bastı.`;
-      processAIRequest({ message: systemPrompt }, currentRoom);
-    }
-  }));
 
   // --- GÖRÜNÜRLÜK KONTROLÜ ---
   useEffect(() => {
@@ -93,6 +80,7 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
     }
   };
 
+  // --- ODA DEĞİŞİMİ VE GEÇMİŞİ YÜKLEME ---
   useEffect(() => {
     const loadHistoryFromCloud = async () => {
       setIsLoading(true);
@@ -150,7 +138,13 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
       const response = await fetchWithTimeout(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payload, sessionId: sessionId, room: targetRoom }), 
+        // YENİ: mode bilgisini gönderiyoruz
+        body: JSON.stringify({ 
+          ...payload, 
+          sessionId: sessionId, 
+          room: targetRoom,
+          mode: isSafeMode ? 'safe' : 'shadow' // <--- MOD BİLGİSİ
+        }), 
       });
 
       if (!response.ok) throw new Error('Network error');
@@ -230,7 +224,7 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
   }, [messages, isLoading]);
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full md:ml-0 bg-gradient-to-b from-black via-gray-950 to-black">
+    <div className={`flex flex-col h-[100dvh] w-full md:ml-0 transition-colors duration-500 ${isSafeMode ? 'bg-slate-950' : 'bg-gradient-to-b from-black via-gray-950 to-black'}`}>
       
       <div className="flex-1 overflow-y-auto pt-32 pb-48 px-4 scroll-smooth overscroll-contain">
         <div className="max-w-4xl mx-auto space-y-6">
@@ -276,4 +270,4 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
       <ChatInput onSend={sendMessage} disabled={isLoading} />
     </div>
   );
-});
+};
