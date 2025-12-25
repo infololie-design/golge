@@ -31,12 +31,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
         checkCompletedRooms(user.id);
       }
     });
-  }, [currentRoom]); // Oda değişince de kontrol et (Anlık güncelleme için)
+  }, [currentRoom]); 
 
-  // --- GÜNCELLENEN KISIM: İLERLEME KONTROLÜ ---
   const checkCompletedRooms = async (userId: string) => {
     try {
-      // Artık şifreli mesajları değil, temiz 'user_progress' tablosunu sorguluyoruz
       const { data } = await supabase
         .from('user_progress')
         .select('room_id')
@@ -64,7 +62,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
     }
   };
 
-  const isAlchemyUnlocked = completedRooms.length >= 1; 
+  // --- DEĞİŞİKLİK BURADA ---
+  // Simya odasının kilidini kontrol et
+  // Kural: En az 2 oda tamamlanmış olmalı
+  const isAlchemyUnlocked = completedRooms.length >= 2; 
 
   return (
     <>
