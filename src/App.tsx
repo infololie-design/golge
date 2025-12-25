@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatContainer, ChatContainerHandle } from './components/ChatContainer';
 import { Auth } from './components/Auth';
+import { JournalModal } from './components/JournalModal'; // YENİ
 import { RoomType, ROOMS } from './types';
 import { Menu, Loader2 } from 'lucide-react';
 import { supabase } from './lib/supabase';
@@ -10,6 +11,7 @@ function App() {
   const [currentRoom, setCurrentRoom] = useState<RoomType>(ROOMS[0].id);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSafeMode, setIsSafeMode] = useState(false);
+  const [showJournal, setShowJournal] = useState(false); // YENİ STATE
   
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -34,17 +36,13 @@ function App() {
     setIsSidebarOpen(false);
   };
 
-  // --- YENİ: MOD DEĞİŞTİRME FONKSİYONU ---
   const handleToggleSafeMode = () => {
     const newMode = !isSafeMode;
-    setIsSafeMode(newMode); // State'i güncelle
-    
-    // ChatContainer'a haber ver ve AI'yı tetikle
+    setIsSafeMode(newMode);
     if (chatRef.current) {
       chatRef.current.triggerModeSwitch(newMode);
     }
-    
-    setIsSidebarOpen(false); // Mobilde menüyü kapat
+    setIsSidebarOpen(false);
   };
 
   if (loading) {
@@ -62,6 +60,9 @@ function App() {
   return (
     <div className={`flex h-screen text-white overflow-hidden transition-colors duration-500 ${isSafeMode ? 'bg-slate-950' : 'bg-black'}`}>
       
+      {/* GÜNLÜK MODALI */}
+      {showJournal && <JournalModal userId={session.user.id} onClose={() => setShowJournal(false)} />}
+
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-zinc-950 border-b border-zinc-800 flex items-center px-4 z-50">
         <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-zinc-400 hover:text-white">
           <Menu className="w-6 h-6" />
@@ -77,7 +78,11 @@ function App() {
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)}
         isSafeMode={isSafeMode}
-        onToggleSafeMode={handleToggleSafeMode} // <--- GÜNCELLENDİ
+        onToggleSafeMode={handleToggleSafeMode}
+        onOpenJournal={() => { // YENİ FONKSİYON
+          setShowJournal(true);
+          setIsSidebarOpen(false);
+        }}
       />
 
       <main className="flex-1 h-full w-full relative">
