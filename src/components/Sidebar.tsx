@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ROOMS, RoomType } from '../types';
-import { X, Trash2, LogOut, ShieldCheck, Wind } from 'lucide-react'; // Wind eklendi
+import { X, Trash2, LogOut, ShieldCheck, Wind, Zap } from 'lucide-react';
 import { clearSession } from '../utils/sessionManager';
 import { supabase } from '../lib/supabase';
 import { AdminDashboard } from './AdminDashboard';
@@ -12,10 +12,11 @@ interface SidebarProps {
   onRoomChange: (room: RoomType) => void;
   isOpen: boolean;
   onClose: () => void;
-  onOpenBreathing: () => void; // <--- YENİ PROP
+  isSafeMode: boolean; // YENİ
+  onToggleSafeMode: () => void; // YENİ
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isOpen, onClose, onOpenBreathing }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isOpen, onClose, isSafeMode, onToggleSafeMode }) => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [showAdmin, setShowAdmin] = useState(false);
 
@@ -43,15 +44,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
       {showAdmin && <AdminDashboard onClose={() => setShowAdmin(false)} />}
 
       {isOpen && (
-        <div 
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden"
-          onClick={onClose}
-        />
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden" onClick={onClose} />
       )}
 
       <aside className={`
         fixed md:static inset-y-0 left-0 z-50
-        w-72 md:w-64 h-full bg-zinc-950 border-r border-zinc-900
+        w-72 md:w-64 h-full border-r transition-colors duration-500
+        ${isSafeMode ? 'bg-slate-900 border-slate-800' : 'bg-zinc-950 border-zinc-900'}
         transform transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full'} 
         md:translate-x-0
@@ -60,17 +59,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
         <div className="p-6 flex-1 flex flex-col">
           
           <div className="flex items-center justify-between mb-8">
-            <h1 className="text-2xl font-bold text-red-600 tracking-widest">GÖLGE</h1>
+            <h1 className={`text-2xl font-bold tracking-widest transition-colors ${isSafeMode ? 'text-cyan-400' : 'text-red-600'}`}>
+              {isSafeMode ? 'GÜVENLİ' : 'GÖLGE'}
+            </h1>
             
             <div className="flex items-center gap-3">
-              <button 
-                onClick={handleReset}
-                className="text-zinc-500 hover:text-red-500 transition-colors p-1 rounded-md hover:bg-zinc-900"
-                title="Sıfırla"
-              >
+              <button onClick={handleReset} className="text-zinc-500 hover:text-red-500 transition-colors p-1 rounded-md hover:bg-zinc-900">
                 <Trash2 className="w-5 h-5" />
               </button>
-
               <button onClick={onClose} className="md:hidden text-zinc-400 hover:text-white">
                 <X className="w-6 h-6" />
               </button>
@@ -78,9 +74,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
           </div>
 
           <div className="mb-6">
-            <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4">
-              Odalar
-            </h2>
+            <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4">Odalar</h2>
             <nav className="space-y-2">
               {ROOMS.map((room) => (
                 <button
@@ -88,16 +82,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
                   onClick={() => onRoomChange(room.id)}
                   className={`w-full flex items-center gap-3 px-4 py-4 rounded-lg transition-all duration-200 text-left group border ${
                     currentRoom === room.id
-                      ? 'bg-red-900/20 border-red-900/50' 
-                      : 'bg-transparent border-transparent hover:bg-zinc-900'
+                      ? (isSafeMode ? 'bg-cyan-900/20 border-cyan-900/50 text-cyan-400' : 'bg-red-900/20 border-red-900/50 text-red-400')
+                      : 'bg-transparent border-transparent hover:bg-zinc-900 text-zinc-400 hover:text-white'
                   }`}
                 >
                   <span className="text-xl">{room.icon}</span>
-                  <span className={`font-medium text-sm ${
-                    currentRoom === room.id ? 'text-red-400' : 'text-zinc-300 group-hover:text-white'
-                  }`}>
-                    {room.name}
-                  </span>
+                  <span className="font-medium text-sm">{room.name}</span>
                 </button>
               ))}
             </nav>
@@ -106,29 +96,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
 
         <div className="p-6 border-t border-zinc-900 space-y-2">
           
-          {/* NEFES ALANI BUTONU (YENİ) */}
+          {/* MOD DEĞİŞTİRME BUTONU */}
           <button 
-            onClick={onOpenBreathing}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-900 hover:text-cyan-400 transition-all mb-2 border border-zinc-800 hover:border-cyan-900/30"
+            onClick={onToggleSafeMode}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all mb-2 border ${
+              isSafeMode 
+                ? 'bg-cyan-900/20 border-cyan-500/50 text-cyan-400 hover:bg-cyan-900/30' 
+                : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+            }`}
           >
-            <Wind className="w-5 h-5" />
-            <span className="font-medium text-sm">Nefes Alanı</span>
+            {isSafeMode ? <Wind className="w-5 h-5" /> : <Zap className="w-5 h-5" />}
+            <span className="font-medium text-sm">
+              {isSafeMode ? 'Gölgeye Dön' : 'Nefes Alanı'}
+            </span>
           </button>
 
           {userEmail === ADMIN_EMAIL && (
-            <button 
-              onClick={() => setShowAdmin(true)}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-900 hover:text-blue-400 transition-all mb-2 border border-zinc-800 hover:border-blue-900/30"
-            >
+            <button onClick={() => setShowAdmin(true)} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-900 hover:text-blue-400 transition-all mb-2 border border-zinc-800">
               <ShieldCheck className="w-5 h-5" />
               <span className="font-medium text-sm">Yönetim Paneli</span>
             </button>
           )}
 
-          <button 
-            onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-500 hover:bg-zinc-900 hover:text-red-400 transition-all"
-          >
+          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-500 hover:bg-zinc-900 hover:text-red-400 transition-all">
             <LogOut className="w-5 h-5" />
             <span className="font-medium text-sm">Çıkış Yap</span>
           </button>
