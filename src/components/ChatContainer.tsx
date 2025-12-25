@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Message, ApiResponse, RoomType } from '../types';
-import { saveMessages } from '../utils/sessionManager';
+import { saveMessages, loadMessages } from '../utils/sessionManager';
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { ChatInput } from './ChatInput';
 import { ShadowCard } from './ShadowCard';
 import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
-import { simpleDecrypt } from '../utils/encryption';
+import { simpleDecrypt, simpleEncrypt } from '../utils/encryption'; // simpleEncrypt eklendi
 
 const N8N_WEBHOOK_URL = 'https://n8n.lolie.com.tr/webhook/61faf25c-aab1-4246-adfe-2caa274fb839';
 
@@ -94,10 +94,8 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
     }
   };
 
-  // --- ODA DEĞİŞİMİ VE GEÇMİŞİ YÜKLEME ---
   useEffect(() => {
     const loadHistoryFromCloud = async () => {
-      // 1. Önce her şeyi sıfırla (Takılmayı önler)
       setIsLoading(true);
       setIsRoomInitializing(false); 
       setMessages([]); 
@@ -122,13 +120,12 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
           .filter((msg: Message) => !msg.content.includes('[SİSTEM'));
 
           setMessages(historyMessages);
-          setIsLoading(false); // Veri geldi, yüklemeyi bitir
+          setIsLoading(false);
           
         } else {
-           // Veri yok, başlatma gerekiyor mu?
            if (!initializedRooms.current.has(currentRoom)) {
             initializedRooms.current.add(currentRoom);
-            setIsRoomInitializing(true); // Başlatma modunu aç
+            setIsRoomInitializing(true);
             
             if (currentRoom === 'yuzlesme') {
               fetchInitialMessage();
@@ -136,13 +133,13 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
               triggerRoomIntro(currentRoom);
             }
           } else {
-            setIsLoading(false); // Zaten başlatılmış ama boş, yüklemeyi bitir
+            setIsLoading(false);
           }
         }
 
       } catch (err) {
         console.error("Geçmiş yüklenirken hata:", err);
-        setIsLoading(false); // Hata olsa bile yüklemeyi bitir
+        setIsLoading(false);
         setIsRoomInitializing(false);
       }
     };
@@ -182,7 +179,7 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
       if (currentRoomRef.current === targetRoom) {
         setMessages(prev => [...prev, aiMessage]);
         setIsLoading(false);
-        setIsRoomInitializing(false); // Cevap gelince başlatma biter
+        setIsRoomInitializing(false);
       }
 
     } catch (error) {
@@ -222,15 +219,33 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
     processAIRequest({ message: content }, currentRoom);
   };
 
+  // --- DÜZELTİLEN KISIM: GÖREVİ VERİTABANINA KAYDET ---
   const handleTaskCompletion = async (feedbackSummary: string) => {
+    const reportContent = `📝 **GÖREV RAPORU:**\n\n${feedbackSummary}`;
+    
+    // 1. Ekrana Bas
     const userNoteMessage: Message = {
       id: crypto.randomUUID(),
-      content: `📝 **GÖREV RAPORU:**\n\n${feedbackSummary}`,
+      content: reportContent,
       sender: 'user',
       timestamp: new Date(),
     };
     setMessages(prev => [...prev, userNoteMessage]);
 
+    // 2. Veritabanına Kaydet (Şifreli olarak)
+    try {
+      await supabase.from('chat_history').insert({
+        user_id: userId,
+        chat_id: userId,
+        role: 'user',
+        content: simpleEncrypt(reportContent), // Şifrele
+        room: currentRoom
+      });
+    } catch (err) {
+      console.error("Rapor kaydedilemedi:", err);
+    }
+
+    // 3. AI'yı Tetikle
     const systemPrompt = `
       [SİSTEM BİLGİSİ: Kullanıcı verilen gölge görevlerini tamamladı ve şu notları düştü:
       ${feedbackSummary}
@@ -252,7 +267,6 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
       <div className="flex-1 overflow-y-auto pt-32 pb-48 px-4 scroll-smooth overscroll-contain">
         <div className="max-w-4xl mx-auto space-y-6">
           
-          {/* YENİ: Yükleme veya Başlatma durumundaysa "Karanlığa hoş geldiniz" YAZMA */}
           {messages.length === 0 && !isLoading && !isRoomInitializing && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -287,7 +301,6 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
             return <MessageBubble key={message.id} message={message} index={index} />;
           })}
 
-          {/* Yükleniyor Animasyonu */}
           {(isLoading || isRoomInitializing) && <TypingIndicator />}
           
           <div ref={messagesEndRef} className="h-4" />
