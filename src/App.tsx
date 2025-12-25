@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
-import { ChatContainer } from './components/ChatContainer';
+import { ChatContainer, ChatContainerHandle } from './components/ChatContainer'; // Handle eklendi
 import { Auth } from './components/Auth';
-import { BreathingModal } from './components/BreathingModal'; // YENİ
 import { RoomType, ROOMS } from './types';
 import { Menu, Loader2 } from 'lucide-react';
 import { supabase } from './lib/supabase';
@@ -10,10 +9,12 @@ import { supabase } from './lib/supabase';
 function App() {
   const [currentRoom, setCurrentRoom] = useState<RoomType>(ROOMS[0].id);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [showBreathing, setShowBreathing] = useState(false); // YENİ STATE
   
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  // ChatContainer'a erişmek için Ref
+  const chatRef = useRef<ChatContainerHandle>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -35,6 +36,14 @@ function App() {
     setIsSidebarOpen(false);
   };
 
+  // PANİK BUTONUNA BASILINCA
+  const handlePanic = () => {
+    if (chatRef.current) {
+      chatRef.current.triggerPanicMode(); // ChatContainer'daki fonksiyonu çalıştır
+      setIsSidebarOpen(false); // Mobilde menüyü kapat
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-screen bg-black flex items-center justify-center">
@@ -50,9 +59,6 @@ function App() {
   return (
     <div className="flex h-screen bg-black text-white overflow-hidden">
       
-      {/* NEFES ALANI MODALI (YENİ) */}
-      {showBreathing && <BreathingModal onClose={() => setShowBreathing(false)} />}
-
       <div className="md:hidden fixed top-0 left-0 right-0 h-16 bg-zinc-950 border-b border-zinc-800 flex items-center px-4 z-50">
         <button 
           onClick={() => setIsSidebarOpen(true)}
@@ -68,14 +74,15 @@ function App() {
         onRoomChange={handleRoomChange}
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)}
-        onOpenBreathing={() => { // YENİ FONKSİYON
-          setShowBreathing(true);
-          setIsSidebarOpen(false); // Mobilde menüyü kapat
-        }}
+        onOpenBreathing={handlePanic} // <--- ARTIK PANİK MODUNU TETİKLİYOR
       />
 
       <main className="flex-1 h-full w-full relative">
-        <ChatContainer currentRoom={currentRoom} userId={session.user.id} />
+        <ChatContainer 
+          ref={chatRef} // <--- REF BAĞLANDI
+          currentRoom={currentRoom} 
+          userId={session.user.id} 
+        />
       </main>
 
     </div>
