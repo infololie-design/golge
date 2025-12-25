@@ -287,7 +287,7 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
   return (
     <div className={`flex flex-col h-[100dvh] w-full md:ml-0 transition-colors duration-500 ${isSafeMode ? 'bg-slate-950' : 'bg-gradient-to-b from-black via-gray-950 to-black'}`}>
       
-      <div className="flex-1 overflow-y-auto pt-32 pb-48 px-4 scroll-smooth overscroll-contain">
+      <div className="flex-1 overflow-y-auto pt-48 pb-48 px-4 scroll-smooth overscroll-contain">
         <div className="max-w-4xl mx-auto space-y-6">
           
           {messages.length === 0 && !isLoading && !isRoomInitializing && (
