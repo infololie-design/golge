@@ -6,8 +6,8 @@ import { TypingIndicator } from './TypingIndicator';
 import { ChatInput } from './ChatInput';
 import { ShadowCard } from './ShadowCard';
 import { motion } from 'framer-motion';
-import { supabase } from '../lib/supabase'; // Supabase eklendi
-import { simpleDecrypt } from '../utils/encryption'; // Şifre çözücü eklendi
+import { supabase } from '../lib/supabase';
+import { simpleDecrypt } from '../utils/encryption';
 
 const N8N_WEBHOOK_URL = 'https://n8n.lolie.com.tr/webhook/61faf25c-aab1-4246-adfe-2caa274fb839';
 
@@ -80,39 +80,35 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
     }
   };
 
-  // --- ODA DEĞİŞİMİ VE GEÇMİŞİ YÜKLEME (BULUTTAN) ---
+  // --- ODA DEĞİŞİMİ VE GEÇMİŞİ YÜKLEME ---
   useEffect(() => {
     const loadHistoryFromCloud = async () => {
       setIsLoading(true);
-      setMessages([]); // Önce temizle
+      setMessages([]); 
 
       try {
-        // 1. Supabase'den verileri çek
-        // Sadece bu kullanıcının verilerini çek (RLS zaten koruyor ama biz yine de filtreleyelim)
+        // YENİ: Sadece bu kullanıcının VE BU ODANIN mesajlarını çek
         const { data, error } = await supabase
           .from('chat_history')
           .select('*')
-          .eq('user_id', userId) 
+          .eq('user_id', userId)
+          .eq('room', currentRoom) // <--- ODA FİLTRESİ EKLENDİ
           .order('created_at', { ascending: true });
 
         if (error) throw error;
 
         if (data && data.length > 0) {
-          // 2. Verileri işle ve şifrelerini çöz
           const historyMessages: Message[] = data.map((item: any) => ({
             id: item.id.toString(),
-            content: simpleDecrypt(item.content), // Şifreyi çöz
-            sender: item.role === 'user' ? 'user' : 'ai', // Rolü eşleştir
+            content: simpleDecrypt(item.content),
+            sender: item.role === 'user' ? 'user' : 'ai',
             timestamp: new Date(item.created_at)
-          }));
+          }))
+          // YENİ: Sistem mesajlarını filtrele (GİZLE)
+          .filter((msg: Message) => !msg.content.includes('[SİSTEM BİLGİSİ:'));
 
-          // 3. Sadece şu anki odanın mesajlarını filtrele?
-          // NOT: Şu an veritabanında "hangi oda" bilgisi yok. 
-          // O yüzden tüm geçmişi getiriyoruz. İleride "room" sütunu ekleyebiliriz.
-          // Şimdilik tüm akışı gösteriyoruz, bu da bir "Yolculuk" hissi verir.
           setMessages(historyMessages);
           
-          // Eğer hiç mesaj yoksa (Yeni kullanıcı) -> Başlat
         } else {
            if (!initializedRooms.current.has(currentRoom)) {
             initializedRooms.current.add(currentRoom);
@@ -132,7 +128,7 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
     };
 
     loadHistoryFromCloud();
-  }, [currentRoom, userId]); // Oda veya Kullanıcı değişince çalış
+  }, [currentRoom, userId]);
 
   const processAIRequest = async (payload: any, targetRoom: string) => {
     if (currentRoomRef.current === targetRoom) {
@@ -144,7 +140,8 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
       const response = await fetchWithTimeout(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payload, sessionId: sessionId }),
+        // YENİ: Odayı da gönderiyoruz
+        body: JSON.stringify({ ...payload, sessionId: sessionId, room: targetRoom }), 
       });
 
       if (!response.ok) throw new Error('Network error');
@@ -158,7 +155,6 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
         timestamp: new Date(),
       };
 
-      // Ekrana bas (Kaydetme işini zaten n8n yapıyor)
       if (currentRoomRef.current === targetRoom) {
         setMessages(prev => [...prev, aiMessage]);
         setIsLoading(false);
@@ -196,10 +192,7 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
       timestamp: new Date(),
     };
 
-    // Mesajı ekrana bas
     setMessages(prev => [...prev, userMessage]);
-    
-    // AI isteğini başlat
     processAIRequest({ message: content }, currentRoom);
   };
 
