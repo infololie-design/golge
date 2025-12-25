@@ -21,14 +21,29 @@ export interface ChatContainerHandle {
   triggerModeSwitch: (newMode: boolean) => void;
 }
 
+// --- GÜÇLENDİRİLMİŞ JSON AYIKLAYICI (CIMBIZ) ---
 const parseShadowReport = (content: string) => {
   try {
-    const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
-    const jsonMatch = cleanContent.match(/\{[\s\S]*"type":\s*"shadow_report"[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+    // 1. İlk '{' karakterini bul
+    const firstBrace = content.indexOf('{');
+    // 2. Son '}' karakterini bul
+    const lastBrace = content.lastIndexOf('}');
+
+    // Eğer parantez yoksa JSON değildir
+    if (firstBrace === -1 || lastBrace === -1) return null;
+
+    // 3. Sadece bu aralığı çekip al (Etraftaki çöpleri at)
+    const jsonString = content.substring(firstBrace, lastBrace + 1);
+
+    // 4. Parse et
+    const parsed = JSON.parse(jsonString);
+
+    // 5. Bizim raporumuz mu kontrol et
+    if (parsed.type === 'shadow_report') {
+      return parsed;
     }
   } catch (e) {
+    // Hata olursa (JSON bozuksa) sessizce null dön, normal mesaj olarak göster
     return null;
   }
   return null;
@@ -220,11 +235,9 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
     processAIRequest({ message: content }, currentRoom);
   };
 
-  // --- GÜNCELLENEN KISIM: İLERLEME KAYDI ---
   const handleTaskCompletion = async (feedbackSummary: string) => {
     const reportContent = `📝 **GÖREV RAPORU:**\n\n${feedbackSummary}`;
     
-    // 1. Ekrana Bas
     const userNoteMessage: Message = {
       id: crypto.randomUUID(),
       content: reportContent,
@@ -233,7 +246,6 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
     };
     setMessages(prev => [...prev, userNoteMessage]);
 
-    // 2. Sohbet Geçmişine Kaydet (Şifreli)
     try {
       await supabase.from('chat_history').insert({
         user_id: userId,
@@ -243,18 +255,15 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
         room: currentRoom
       });
 
-      // 3. YENİ: İlerleme Tablosuna Kaydet (Şifresiz - Sadece Oda ID'si)
-      // Bu sayede Sidebar bunu kolayca okuyabilir.
       await supabase.from('user_progress').upsert({
         user_id: userId,
         room_id: currentRoom
-      }, { onConflict: 'user_id, room_id' }); // Zaten varsa hata verme, güncelle
+      }, { onConflict: 'user_id, room_id' });
 
     } catch (err) {
       console.error("Rapor kaydedilemedi:", err);
     }
 
-    // 4. AI'yı Tetikle
     const systemPrompt = `
       [SİSTEM BİLGİSİ: Kullanıcı verilen gölge görevlerini tamamladı ve şu notları düştü:
       ${feedbackSummary}
