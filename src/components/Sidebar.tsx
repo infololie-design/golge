@@ -4,7 +4,7 @@ import { X, Trash2, LogOut, ShieldCheck, Calendar, Lock } from 'lucide-react';
 import { clearSession } from '../utils/sessionManager';
 import { supabase } from '../lib/supabase';
 import { AdminDashboard } from './AdminDashboard';
-import { LockedModal } from './LockedModal'; // YENİ: Modal eklendi
+import { LockedModal } from './LockedModal';
 
 const ADMIN_EMAIL = 'm.mrcn94@gmail.com'; 
 
@@ -22,8 +22,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [showAdmin, setShowAdmin] = useState(false);
   const [completedRooms, setCompletedRooms] = useState<string[]>([]);
-  
-  // YENİ: Kilit Modalı State'i
   const [showLockedModal, setShowLockedModal] = useState(false);
 
   useEffect(() => {
@@ -33,18 +31,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
         checkCompletedRooms(user.id);
       }
     });
-  }, []);
+  }, [currentRoom]); // Oda değişince de kontrol et (Anlık güncelleme için)
 
+  // --- GÜNCELLENEN KISIM: İLERLEME KONTROLÜ ---
   const checkCompletedRooms = async (userId: string) => {
     try {
+      // Artık şifreli mesajları değil, temiz 'user_progress' tablosunu sorguluyoruz
       const { data } = await supabase
-        .from('chat_history')
-        .select('room')
-        .eq('user_id', userId)
-        .ilike('content', '%📝 **GÖREV RAPORU:**%');
+        .from('user_progress')
+        .select('room_id')
+        .eq('user_id', userId);
 
       if (data) {
-        const rooms = Array.from(new Set(data.map(item => item.room)));
+        const rooms = data.map(item => item.room_id);
         setCompletedRooms(rooms);
       }
     } catch (error) {
@@ -65,15 +64,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
     }
   };
 
-  // Simya odasının kilidini kontrol et
-  // Test için 1 oda yeterli, normalde 4 olmalı
   const isAlchemyUnlocked = completedRooms.length >= 1; 
 
   return (
     <>
       {showAdmin && <AdminDashboard onClose={() => setShowAdmin(false)} />}
       
-      {/* YENİ: Kilit Modalı */}
       {showLockedModal && (
         <LockedModal 
           onClose={() => setShowLockedModal(false)} 
@@ -119,16 +115,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
                     key={room.id}
                     onClick={() => {
                       if (isLocked) {
-                        setShowLockedModal(true); // Kilitliyse Modalı Aç
+                        setShowLockedModal(true);
                       } else {
-                        onRoomChange(room.id); // Açıksa Odaya Git
+                        onRoomChange(room.id);
                       }
                     }}
                     className={`w-full flex items-center justify-between px-4 py-4 rounded-lg transition-all duration-200 text-left group border ${
                       currentRoom === room.id
                         ? 'bg-red-900/20 border-red-900/50 text-red-400'
                         : 'bg-transparent border-transparent hover:bg-zinc-900 text-zinc-400 hover:text-white'
-                    } ${isLocked ? 'opacity-70' : ''}`} // Opacity'yi biraz artırdım ki tıklanabilir gibi dursun
+                    } ${isLocked ? 'opacity-70' : ''}`}
                   >
                     <div className="flex items-center gap-3">
                       <span className="text-xl">{room.icon}</span>
