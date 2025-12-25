@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
-import { ChatContainer } from './components/ChatContainer';
+import { ChatContainer, ChatContainerHandle } from './components/ChatContainer';
 import { Auth } from './components/Auth';
 import { RoomType, ROOMS } from './types';
 import { Menu, Loader2 } from 'lucide-react';
@@ -9,12 +9,12 @@ import { supabase } from './lib/supabase';
 function App() {
   const [currentRoom, setCurrentRoom] = useState<RoomType>(ROOMS[0].id);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  
-  // YENİ: Güvenli Mod Durumu
   const [isSafeMode, setIsSafeMode] = useState(false);
   
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  const chatRef = useRef<ChatContainerHandle>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -32,6 +32,19 @@ function App() {
   const handleRoomChange = (roomId: RoomType) => {
     setCurrentRoom(roomId);
     setIsSidebarOpen(false);
+  };
+
+  // --- YENİ: MOD DEĞİŞTİRME FONKSİYONU ---
+  const handleToggleSafeMode = () => {
+    const newMode = !isSafeMode;
+    setIsSafeMode(newMode); // State'i güncelle
+    
+    // ChatContainer'a haber ver ve AI'yı tetikle
+    if (chatRef.current) {
+      chatRef.current.triggerModeSwitch(newMode);
+    }
+    
+    setIsSidebarOpen(false); // Mobilde menüyü kapat
   };
 
   if (loading) {
@@ -63,15 +76,16 @@ function App() {
         onRoomChange={handleRoomChange}
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)}
-        isSafeMode={isSafeMode} // <--- YENİ PROP
-        onToggleSafeMode={() => setIsSafeMode(!isSafeMode)} // <--- YENİ FONKSİYON
+        isSafeMode={isSafeMode}
+        onToggleSafeMode={handleToggleSafeMode} // <--- GÜNCELLENDİ
       />
 
       <main className="flex-1 h-full w-full relative">
         <ChatContainer 
+          ref={chatRef} 
           currentRoom={currentRoom} 
           userId={session.user.id} 
-          isSafeMode={isSafeMode} // <--- YENİ PROP
+          isSafeMode={isSafeMode}
         />
       </main>
 
