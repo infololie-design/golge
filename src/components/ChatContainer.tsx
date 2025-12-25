@@ -7,7 +7,7 @@ import { ChatInput } from './ChatInput';
 import { ShadowCard } from './ShadowCard';
 import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabase';
-import { simpleDecrypt, simpleEncrypt } from '../utils/encryption'; // simpleEncrypt eklendi
+import { simpleDecrypt, simpleEncrypt } from '../utils/encryption';
 
 const N8N_WEBHOOK_URL = 'https://n8n.lolie.com.tr/webhook/61faf25c-aab1-4246-adfe-2caa274fb839';
 
@@ -24,8 +24,9 @@ export interface ChatContainerHandle {
 const parseShadowReport = (content: string) => {
   try {
     const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
-    if (cleanJson.startsWith('{') && cleanJson.includes('"type": "shadow_report"')) {
-      return JSON.parse(cleanJson);
+    const jsonMatch = cleanContent.match(/\{[\s\S]*"type":\s*"shadow_report"[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
     }
   } catch (e) {
     return null;
@@ -219,7 +220,7 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
     processAIRequest({ message: content }, currentRoom);
   };
 
-  // --- DÜZELTİLEN KISIM: GÖREVİ VERİTABANINA KAYDET ---
+  // --- GÜNCELLENEN KISIM: İLERLEME KAYDI ---
   const handleTaskCompletion = async (feedbackSummary: string) => {
     const reportContent = `📝 **GÖREV RAPORU:**\n\n${feedbackSummary}`;
     
@@ -232,20 +233,28 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
     };
     setMessages(prev => [...prev, userNoteMessage]);
 
-    // 2. Veritabanına Kaydet (Şifreli olarak)
+    // 2. Sohbet Geçmişine Kaydet (Şifreli)
     try {
       await supabase.from('chat_history').insert({
         user_id: userId,
         chat_id: userId,
         role: 'user',
-        content: simpleEncrypt(reportContent), // Şifrele
+        content: simpleEncrypt(reportContent),
         room: currentRoom
       });
+
+      // 3. YENİ: İlerleme Tablosuna Kaydet (Şifresiz - Sadece Oda ID'si)
+      // Bu sayede Sidebar bunu kolayca okuyabilir.
+      await supabase.from('user_progress').upsert({
+        user_id: userId,
+        room_id: currentRoom
+      }, { onConflict: 'user_id, room_id' }); // Zaten varsa hata verme, güncelle
+
     } catch (err) {
       console.error("Rapor kaydedilemedi:", err);
     }
 
-    // 3. AI'yı Tetikle
+    // 4. AI'yı Tetikle
     const systemPrompt = `
       [SİSTEM BİLGİSİ: Kullanıcı verilen gölge görevlerini tamamladı ve şu notları düştü:
       ${feedbackSummary}
