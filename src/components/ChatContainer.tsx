@@ -18,7 +18,7 @@ interface ChatContainerProps {
 }
 
 export interface ChatContainerHandle {
-  triggerModeSwitch: (newMode: boolean) => void; // İsim değişti
+  triggerModeSwitch: (newMode: boolean) => void;
 }
 
 const parseShadowReport = (content: string) => {
@@ -36,8 +36,10 @@ const parseShadowReport = (content: string) => {
 export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>(({ currentRoom, userId, isSafeMode }, ref) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // YENİ: Odanın ilk yüklenip yüklenmediğini takip eden state
+  const [isRoomInitializing, setIsRoomInitializing] = useState(false);
   
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const sessionId = userId; 
   const currentRoomRef = useRef<RoomType>(currentRoom);
   const initializedRooms = useRef<Set<string>>(new Set());
@@ -47,20 +49,15 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
     currentRoomRef.current = currentRoom;
   }, [currentRoom]);
 
-  // --- DIŞARIYA AÇILAN KAPI (MOD DEĞİŞİMİ) ---
   useImperativeHandle(ref, () => ({
     triggerModeSwitch: (newMode: boolean) => {
-      // Mod değiştiğinde AI'ya gizli sinyal gönder
       const systemPrompt = newMode 
         ? `[SİSTEM: MOD DEĞİŞTİ - GÜVENLİ MODA GEÇİLDİ]` 
         : `[SİSTEM: MOD DEĞİŞTİ - GÖLGE MODUNA DÖNÜLDÜ]`;
-      
-      // İsteği gönder (State'deki isSafeMode henüz güncellenmemiş olabilir, o yüzden parametreyi kullanıyoruz)
       processAIRequest({ message: systemPrompt, mode: newMode ? 'safe' : 'shadow' }, currentRoom);
     }
   }));
 
-  // --- GÖRÜNÜRLÜK KONTROLÜ ---
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -68,6 +65,7 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
         const timeDiff = now - lastActivityTime.current;
         if (isLoading && timeDiff > 10000) {
           setIsLoading(false);
+          setIsRoomInitializing(false); // Takılı kalırsa kurtar
           const errorMessage: Message = {
             id: crypto.randomUUID(),
             content: '⚠️ Uygulama arka planda kaldığı için bağlantı koptu. Lütfen son mesajınızı tekrar gönderin.',
@@ -97,6 +95,7 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
     }
   };
 
+  // --- ODA DEĞİŞİMİ VE GEÇMİŞİ YÜKLEME ---
   useEffect(() => {
     const loadHistoryFromCloud = async () => {
       setIsLoading(true);
@@ -122,21 +121,26 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
           .filter((msg: Message) => !msg.content.includes('[SİSTEM'));
 
           setMessages(historyMessages);
+          setIsLoading(false); // Veri varsa yükleme bitti
           
         } else {
+           // Veri yoksa, bu odayı başlatmamız lazım
            if (!initializedRooms.current.has(currentRoom)) {
             initializedRooms.current.add(currentRoom);
+            setIsRoomInitializing(true); // YENİ: Başlatma moduna al
+            
             if (currentRoom === 'yuzlesme') {
               fetchInitialMessage();
             } else {
               triggerRoomIntro(currentRoom);
             }
+          } else {
+            setIsLoading(false); // Zaten başlatılmış ama boşsa (örn: silinmişse) yüklemeyi bitir
           }
         }
 
       } catch (err) {
         console.error("Geçmiş yüklenirken hata:", err);
-      } finally {
         setIsLoading(false);
       }
     };
@@ -154,7 +158,6 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
       const response = await fetchWithTimeout(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Payload içindeki mode varsa onu kullan, yoksa prop'tan al
         body: JSON.stringify({ 
           ...payload, 
           sessionId: sessionId, 
@@ -177,12 +180,14 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
       if (currentRoomRef.current === targetRoom) {
         setMessages(prev => [...prev, aiMessage]);
         setIsLoading(false);
+        setIsRoomInitializing(false); // YENİ: Cevap gelince başlatma modu biter
       }
 
     } catch (error) {
       console.error('AI Process Error:', error);
       if (currentRoomRef.current === targetRoom) {
         setIsLoading(false);
+        setIsRoomInitializing(false); // Hata olsa da bitir
         const errorMessage: Message = {
           id: crypto.randomUUID(),
           content: 'Bağlantı hatası oluştu. Lütfen tekrar deneyin.',
@@ -244,7 +249,9 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
       
       <div className="flex-1 overflow-y-auto pt-32 pb-48 px-4 scroll-smooth overscroll-contain">
         <div className="max-w-4xl mx-auto space-y-6">
-          {messages.length === 0 && !isLoading && (
+          
+          {/* YENİ: Yükleme veya Başlatma durumundaysa "Karanlığa hoş geldiniz" YAZMA */}
+          {messages.length === 0 && !isLoading && !isRoomInitializing && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -278,12 +285,14 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
             return <MessageBubble key={message.id} message={message} index={index} />;
           })}
 
-          {isLoading && <TypingIndicator />}
+          {/* Yükleniyor Animasyonu */}
+          {(isLoading || isRoomInitializing) && <TypingIndicator />}
+          
           <div ref={messagesEndRef} className="h-4" />
         </div>
       </div>
 
-      <ChatInput onSend={sendMessage} disabled={isLoading} />
+      <ChatInput onSend={sendMessage} disabled={isLoading || isRoomInitializing} />
     </div>
   );
 });
