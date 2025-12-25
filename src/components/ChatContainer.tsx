@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Message, ApiResponse, RoomType } from '../types';
-import { saveMessages } from '../utils/sessionManager';
+import { saveMessages, loadMessages } from '../utils/sessionManager';
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { ChatInput } from './ChatInput';
@@ -16,6 +16,11 @@ interface ChatContainerProps {
   userId: string;
 }
 
+// Dışarıdan çağrılabilir fonksiyonlar için tip tanımı
+export interface ChatContainerHandle {
+  triggerPanicMode: () => void;
+}
+
 const parseShadowReport = (content: string) => {
   try {
     const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -28,13 +33,13 @@ const parseShadowReport = (content: string) => {
   return null;
 };
 
-export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
+// forwardRef ile bileşeni sarmalıyoruz
+export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>(({ currentRoom, userId }, ref) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const sessionId = userId; 
-  
   const currentRoomRef = useRef<RoomType>(currentRoom);
   const initializedRooms = useRef<Set<string>>(new Set());
   const lastActivityTime = useRef<number>(Date.now());
@@ -42,6 +47,14 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
   useEffect(() => {
     currentRoomRef.current = currentRoom;
   }, [currentRoom]);
+
+  // --- DIŞARIYA AÇILAN KAPI (PANİK MODU) ---
+  useImperativeHandle(ref, () => ({
+    triggerPanicMode: () => {
+      const systemPrompt = `[SİSTEM: PANİK MODU] Kullanıcı nefes alanı butonuna bastı.`;
+      processAIRequest({ message: systemPrompt }, currentRoom);
+    }
+  }));
 
   // --- GÖRÜNÜRLÜK KONTROLÜ ---
   useEffect(() => {
@@ -80,7 +93,6 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
     }
   };
 
-  // --- ODA DEĞİŞİMİ VE GEÇMİŞİ YÜKLEME ---
   useEffect(() => {
     const loadHistoryFromCloud = async () => {
       setIsLoading(true);
@@ -92,7 +104,7 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
           .select('*')
           .eq('user_id', userId)
           .eq('room', currentRoom)
-          .order('created_at', { ascending: true }); // Tarihe göre sırala
+          .order('created_at', { ascending: true });
 
         if (error) throw error;
 
@@ -103,8 +115,6 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
             sender: item.role === 'user' ? 'user' : 'ai',
             timestamp: new Date(item.created_at)
           }))
-          // --- DÜZELTME 1: GÖREV RAPORUNU SİLMİYORUZ ---
-          // Sadece [SİSTEM] mesajlarını siliyoruz. Görev raporları hafızada kalmalı ki kart yeşil olsun.
           .filter((msg: Message) => !msg.content.includes('[SİSTEM'));
 
           setMessages(historyMessages);
@@ -237,15 +247,11 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
           {messages.map((message, index) => {
             const reportData = message.sender === 'ai' ? parseShadowReport(message.content) : null;
             
-            // --- DÜZELTME 2: GÖREV RAPORUNU GİZLE ---
-            // Eğer mesaj bir "Görev Raporu" ise, onu ekrana basma (null döndür).
-            // Ama mesaj listesinde durduğu için aşağıdaki 'isCompleted' kontrolü çalışacak.
             if (message.content.includes('📝 **GÖREV RAPORU:**')) {
               return null;
             }
 
             if (reportData) {
-              // Dedektif: Bir sonraki mesaja bak, eğer Görev Raporu ise kartı yeşil yap.
               const nextMessage = messages[index + 1];
               const isCompleted = nextMessage?.content.includes('📝 **GÖREV RAPORU:**');
 
@@ -270,4 +276,4 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
       <ChatInput onSend={sendMessage} disabled={isLoading} />
     </div>
   );
-};
+});
