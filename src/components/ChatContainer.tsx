@@ -87,12 +87,11 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
       setMessages([]); 
 
       try {
-        // YENİ: Sadece bu kullanıcının VE BU ODANIN mesajlarını çek
         const { data, error } = await supabase
           .from('chat_history')
           .select('*')
           .eq('user_id', userId)
-          .eq('room', currentRoom) // <--- ODA FİLTRESİ EKLENDİ
+          .eq('room', currentRoom)
           .order('created_at', { ascending: true });
 
         if (error) throw error;
@@ -104,8 +103,9 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
             sender: item.role === 'user' ? 'user' : 'ai',
             timestamp: new Date(item.created_at)
           }))
-          // YENİ: Sistem mesajlarını filtrele (GİZLE)
-          .filter((msg: Message) => !msg.content.includes('[SİSTEM BİLGİSİ:'));
+          // --- DÜZELTME 1: SİSTEM MESAJLARINI FİLTRELE ---
+          // İçinde [SİSTEM geçen mesajları ekrana basma
+          .filter((msg: Message) => !msg.content.includes('[SİSTEM'));
 
           setMessages(historyMessages);
           
@@ -140,7 +140,6 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
       const response = await fetchWithTimeout(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // YENİ: Odayı da gönderiyoruz
         body: JSON.stringify({ ...payload, sessionId: sessionId, room: targetRoom }), 
       });
 
@@ -196,15 +195,31 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
     processAIRequest({ message: content }, currentRoom);
   };
 
+  // --- DÜZELTME 2: GÖREVLERİ KAYDET ---
   const handleTaskCompletion = async (feedbackSummary: string) => {
+    
+    // 1. Kullanıcının notlarını EKRANA BAS (Kalıcı olsun)
+    const userNoteMessage: Message = {
+      id: crypto.randomUUID(),
+      content: `📝 **GÖREV RAPORU:**\n\n${feedbackSummary}`,
+      sender: 'user',
+      timestamp: new Date(),
+    };
+    setMessages(prev => [...prev, userNoteMessage]);
+
+    // 2. Bu notu veritabanına kaydetmek için n8n'e gönder (Ama AI'ya cevap verdirme, sadece kaydet)
+    // Not: n8n tarafı zaten gelen her şeyi kaydediyor. Biz sadece AI'yı tetiklemek için gönderiyoruz.
+    
     const systemPrompt = `
-      [SİSTEM BİLGİSİ: Kullanıcı verilen gölge görevlerini tamamladı ve şu notları düştü:
+      [SİSTEM BİLGİSİ: Kullanıcı görevleri tamamladı.
+      KULLANICI NOTLARI:
       ${feedbackSummary}
       
       TALİMAT: Artık "Yüzleşme/Sorgulama" aşamasını bitir. "ENTEGRASYON/REHBERLİK" aşamasına geç.
       Kullanıcının notlarını analiz et. Zorlandığı yerleri şefkatle ama gerçekçi bir dille yorumla.
-      Artık onu karanlıkta bırakma, tünelin ucundaki ışığı göster. Daha yapıcı, daha bilge bir tona bürün.]
+      Artık onu karanlıkta bırakma, tünelin ucundaki ışığı göster.]
     `;
+    
     await processAIRequest({ message: systemPrompt }, currentRoom);
   };
 
