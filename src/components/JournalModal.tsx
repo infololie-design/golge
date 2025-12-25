@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Calendar, Activity, ChevronLeft, ChevronRight, MessageSquare, Map, Loader2 } from 'lucide-react';
+import { X, Calendar, Activity, ChevronLeft, ChevronRight, MessageSquare, Map, Loader2, HeartPulse } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { ROOMS } from '../types';
 
@@ -7,6 +7,7 @@ interface DayStats {
   messageCount: number;
   roomsVisited: string[];
   userMessageCount: number;
+  mood: string; // YENİ: Duygu Durumu
 }
 
 export const JournalModal = ({ onClose, userId }: { onClose: () => void, userId: string }) => {
@@ -14,7 +15,6 @@ export const JournalModal = ({ onClose, userId }: { onClose: () => void, userId:
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
   
-  // YENİ STATE'LER: Seçilen gün ve detayları
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [dayStats, setDayStats] = useState<DayStats | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
@@ -23,7 +23,6 @@ export const JournalModal = ({ onClose, userId }: { onClose: () => void, userId:
     fetchActivity();
   }, []);
 
-  // 1. Sadece tarihleri çek (Takvimi boyamak için)
   const fetchActivity = async () => {
     try {
       const { data, error } = await supabase
@@ -37,7 +36,6 @@ export const JournalModal = ({ onClose, userId }: { onClose: () => void, userId:
         const dates = new Set(data.map(item => item.created_at.split('T')[0]));
         setActiveDates(Array.from(dates));
         
-        // Bugünün tarihini otomatik seç
         const today = new Date().toISOString().split('T')[0];
         if (dates.has(today)) {
           handleDateClick(today);
@@ -50,14 +48,21 @@ export const JournalModal = ({ onClose, userId }: { onClose: () => void, userId:
     }
   };
 
-  // 2. Bir güne tıklayınca detayları çek
+  // --- YENİ: DUYGU HESAPLAMA MANTIĞI ---
+  const calculateMood = (rooms: string[]) => {
+    if (rooms.includes('kokler')) return "Geçmişle Hesaplaşma";
+    if (rooms.includes('para')) return "Güç ve Değer Sorgusu";
+    if (rooms.includes('iliskiler')) return "Duygusal Türbülans";
+    if (rooms.includes('yuzlesme')) return "İçsel Uyanış";
+    return "Sessiz Gözlem";
+  };
+
   const handleDateClick = async (dateStr: string) => {
     setSelectedDate(dateStr);
     setLoadingDetails(true);
     setDayStats(null);
 
     try {
-      // O günün başlangıcı ve bitişi
       const startOfDay = `${dateStr}T00:00:00.000Z`;
       const endOfDay = `${dateStr}T23:59:59.999Z`;
 
@@ -71,14 +76,17 @@ export const JournalModal = ({ onClose, userId }: { onClose: () => void, userId:
       if (error) throw error;
 
       if (data) {
-        // İstatistikleri hesapla
         const uniqueRooms = Array.from(new Set(data.map(item => item.room)));
         const userMsgs = data.filter(item => item.role === 'user').length;
+        
+        // Duyguyu hesapla
+        const calculatedMood = calculateMood(uniqueRooms);
 
         setDayStats({
           messageCount: data.length,
           roomsVisited: uniqueRooms,
-          userMessageCount: userMsgs
+          userMessageCount: userMsgs,
+          mood: calculatedMood // State'e ekle
         });
       }
     } catch (error) {
@@ -88,7 +96,6 @@ export const JournalModal = ({ onClose, userId }: { onClose: () => void, userId:
     }
   };
 
-  // Yardımcı: Oda isminden İkon bulma
   const getRoomIcon = (roomId: string) => {
     const room = ROOMS.find(r => r.id === roomId);
     return room ? room.icon : '❓';
@@ -99,7 +106,6 @@ export const JournalModal = ({ onClose, userId }: { onClose: () => void, userId:
     return room ? room.name : roomId;
   };
 
-  // Takvim Hesaplamaları
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -164,7 +170,7 @@ export const JournalModal = ({ onClose, userId }: { onClose: () => void, userId:
                   <button 
                     key={day}
                     onClick={() => handleDateClick(dateStr)}
-                    disabled={!isActive} // Sadece aktif günler tıklanabilir
+                    disabled={!isActive}
                     className={`
                       aspect-square rounded-lg flex flex-col items-center justify-center text-sm font-medium transition-all relative
                       ${isActive 
@@ -196,30 +202,45 @@ export const JournalModal = ({ onClose, userId }: { onClose: () => void, userId:
                   <Loader2 className="w-6 h-6 text-red-500 animate-spin" />
                 </div>
               ) : dayStats ? (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
                   
-                  {/* İstatistik Kutusu */}
-                  <div className="bg-zinc-900/50 p-4 rounded-lg border border-zinc-800">
-                    <div className="flex items-center gap-2 text-zinc-500 mb-2">
-                      <MessageSquare className="w-4 h-4" />
-                      <span className="text-xs">Etkileşim</span>
+                  {/* YENİ: DUYGU DURUMU KARTI */}
+                  <div className="bg-gradient-to-r from-zinc-900 to-zinc-950 p-4 rounded-lg border border-zinc-800 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-red-900/20 rounded-full">
+                        <HeartPulse className="w-5 h-5 text-red-500" />
+                      </div>
+                      <div>
+                        <span className="text-xs text-zinc-500 block uppercase">Günün Teması</span>
+                        <span className="text-white font-bold">{dayStats.mood}</span>
+                      </div>
                     </div>
-                    <div className="text-2xl font-bold text-white">{dayStats.messageCount}</div>
-                    <div className="text-xs text-zinc-600 mt-1">{dayStats.userMessageCount} tanesi senin mesajın</div>
                   </div>
 
-                  {/* Odalar Kutusu */}
-                  <div className="bg-zinc-900/50 p-4 rounded-lg border border-zinc-800">
-                    <div className="flex items-center gap-2 text-zinc-500 mb-2">
-                      <Map className="w-4 h-4" />
-                      <span className="text-xs">Gezilen Odalar</span>
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* İstatistik */}
+                    <div className="bg-zinc-900/50 p-4 rounded-lg border border-zinc-800">
+                      <div className="flex items-center gap-2 text-zinc-500 mb-2">
+                        <MessageSquare className="w-4 h-4" />
+                        <span className="text-xs">Etkileşim</span>
+                      </div>
+                      <div className="text-2xl font-bold text-white">{dayStats.messageCount}</div>
+                      <div className="text-xs text-zinc-600 mt-1">{dayStats.userMessageCount} tanesi senin mesajın</div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {dayStats.roomsVisited.map(room => (
-                        <span key={room} className="text-xl" title={getRoomName(room)}>
-                          {getRoomIcon(room)}
-                        </span>
-                      ))}
+
+                    {/* Odalar */}
+                    <div className="bg-zinc-900/50 p-4 rounded-lg border border-zinc-800">
+                      <div className="flex items-center gap-2 text-zinc-500 mb-2">
+                        <Map className="w-4 h-4" />
+                        <span className="text-xs">Gezilen Odalar</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {dayStats.roomsVisited.map(room => (
+                          <span key={room} className="text-xl" title={getRoomName(room)}>
+                            {getRoomIcon(room)}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
