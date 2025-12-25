@@ -15,21 +15,39 @@ interface ChatContainerProps {
   currentRoom: RoomType;
   userId: string;
   isSafeMode: boolean;
-  onProgressUpdate: () => void; // <--- YENİ PROP
+  onProgressUpdate: () => void;
 }
 
 export interface ChatContainerHandle {
   triggerModeSwitch: (newMode: boolean) => void;
 }
 
+// --- DÜZELTİLEN KISIM: MANUEL JSON AYIKLAYICI ---
 const parseShadowReport = (content: string) => {
   try {
-    const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
-    const jsonMatch = cleanContent.match(/\{[\s\S]*"type":\s*"shadow_report"[\s\S]*\}/);
-    if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+    // 1. Markdown kod bloklarını temizle
+    const cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
+    
+    // 2. İlk süslü parantezi bul
+    const startIndex = cleanContent.indexOf('{');
+    // 3. Son süslü parantezi bul
+    const endIndex = cleanContent.lastIndexOf('}');
+    
+    // Eğer parantezler varsa ve mantıklı bir sıradaysa
+    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+      // 4. Aradaki metni çekip al
+      const jsonStr = cleanContent.substring(startIndex, endIndex + 1);
+      
+      // 5. JSON'a çevir
+      const parsed = JSON.parse(jsonStr);
+      
+      // 6. Tip kontrolü yap
+      if (parsed.type === 'shadow_report') {
+        return parsed;
+      }
     }
   } catch (e) {
+    // JSON bozuksa sessizce null dön (Normal mesaj olarak gösterilir)
     return null;
   }
   return null;
@@ -246,7 +264,6 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
         room_id: currentRoom
       }, { onConflict: 'user_id, room_id' });
 
-      // YENİ: Patron'a haber ver (İlerleme güncellendi)
       onProgressUpdate(); 
 
     } catch (err) {
