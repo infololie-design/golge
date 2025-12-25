@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { ROOMS, RoomType } from '../types';
-import { X, Trash2, LogOut, ShieldCheck } from 'lucide-react';
+import { X, Trash2, LogOut, ShieldCheck, Wind } from 'lucide-react'; // Wind eklendi
 import { clearSession } from '../utils/sessionManager';
 import { supabase } from '../lib/supabase';
-import { AdminDashboard } from './AdminDashboard'; // Admin paneli eklendi
+import { AdminDashboard } from './AdminDashboard';
 
-// --- BURAYA KENDİ E-POSTANI YAZ ---
 const ADMIN_EMAIL = 'm.mrcn94@gmail.com'; 
 
 interface SidebarProps {
@@ -13,13 +12,13 @@ interface SidebarProps {
   onRoomChange: (room: RoomType) => void;
   isOpen: boolean;
   onClose: () => void;
+  onOpenBreathing: () => void; // <--- YENİ PROP
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isOpen, onClose }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isOpen, onClose, onOpenBreathing }) => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [showAdmin, setShowAdmin] = useState(false);
 
-  // Kullanıcının e-postasını öğren
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) setUserEmail(user.email || null);
@@ -41,7 +40,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
 
   return (
     <>
-      {/* Admin Paneli Modalı */}
       {showAdmin && <AdminDashboard onClose={() => setShowAdmin(false)} />}
 
       {isOpen && (
@@ -108,7 +106,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
 
         <div className="p-6 border-t border-zinc-900 space-y-2">
           
-          {/* SADECE ADMİN GÖREBİLİR */}
+          {/* NEFES ALANI BUTONU (YENİ) */}
+          <button 
+            onClick={onOpenBreathing}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-900 hover:text-cyan-400 transition-all mb-2 border border-zinc-800 hover:border-cyan-900/30"
+          >
+            <Wind className="w-5 h-5" />
+            <span className="font-medium text-sm">Nefes Alanı</span>
+          </button>
+
           {userEmail === ADMIN_EMAIL && (
             <button 
               onClick={() => setShowAdmin(true)}
@@ -131,4 +137,3 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
     </>
   );
 };
-
