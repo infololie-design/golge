@@ -4,6 +4,7 @@ import { X, Trash2, LogOut, ShieldCheck, Calendar, Lock } from 'lucide-react';
 import { clearSession } from '../utils/sessionManager';
 import { supabase } from '../lib/supabase';
 import { AdminDashboard } from './AdminDashboard';
+import { LockedModal } from './LockedModal'; // YENİ: Modal eklendi
 
 const ADMIN_EMAIL = 'm.mrcn94@gmail.com'; 
 
@@ -20,10 +21,12 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isOpen, onClose, onOpenJournal }) => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [showAdmin, setShowAdmin] = useState(false);
-  const [completedRooms, setCompletedRooms] = useState<string[]>([]); // Tamamlanan odalar
+  const [completedRooms, setCompletedRooms] = useState<string[]>([]);
+  
+  // YENİ: Kilit Modalı State'i
+  const [showLockedModal, setShowLockedModal] = useState(false);
 
   useEffect(() => {
-    // Kullanıcıyı al
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         setUserEmail(user.email || null);
@@ -32,11 +35,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
     });
   }, []);
 
-  // Hangi odalarda rapor alınmış kontrol et
   const checkCompletedRooms = async (userId: string) => {
     try {
-      // Veritabanında "GÖREV RAPORU" içeren mesajları bul
-      // Bu mesajlar, kullanıcının o odadaki görevi tamamladığını gösterir
       const { data } = await supabase
         .from('chat_history')
         .select('room')
@@ -66,12 +66,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
   };
 
   // Simya odasının kilidini kontrol et
-  // Şimdilik test için: En az 1 oda tamamlandıysa aç (Normalde 4 olmalı)
+  // Test için 1 oda yeterli, normalde 4 olmalı
   const isAlchemyUnlocked = completedRooms.length >= 1; 
 
   return (
     <>
       {showAdmin && <AdminDashboard onClose={() => setShowAdmin(false)} />}
+      
+      {/* YENİ: Kilit Modalı */}
+      {showLockedModal && (
+        <LockedModal 
+          onClose={() => setShowLockedModal(false)} 
+          completedRooms={completedRooms} 
+        />
+      )}
 
       {isOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden" onClick={onClose} />
@@ -104,26 +112,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4">Odalar</h2>
             <nav className="space-y-2">
               {ROOMS.map((room) => {
-                // Simya odası kilitli mi?
                 const isLocked = room.id === 'simya' && !isAlchemyUnlocked;
 
                 return (
                   <button
                     key={room.id}
-                    onClick={() => !isLocked && onRoomChange(room.id)}
-                    disabled={isLocked}
+                    onClick={() => {
+                      if (isLocked) {
+                        setShowLockedModal(true); // Kilitliyse Modalı Aç
+                      } else {
+                        onRoomChange(room.id); // Açıksa Odaya Git
+                      }
+                    }}
                     className={`w-full flex items-center justify-between px-4 py-4 rounded-lg transition-all duration-200 text-left group border ${
                       currentRoom === room.id
                         ? 'bg-red-900/20 border-red-900/50 text-red-400'
                         : 'bg-transparent border-transparent hover:bg-zinc-900 text-zinc-400 hover:text-white'
-                    } ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    } ${isLocked ? 'opacity-70' : ''}`} // Opacity'yi biraz artırdım ki tıklanabilir gibi dursun
                   >
                     <div className="flex items-center gap-3">
                       <span className="text-xl">{room.icon}</span>
                       <span className="font-medium text-sm">{room.name}</span>
                     </div>
                     
-                    {/* Kilit İkonu */}
                     {isLocked && <Lock className="w-4 h-4 text-zinc-600" />}
                   </button>
                 );
