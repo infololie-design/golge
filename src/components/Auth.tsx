@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Lock, Mail, Loader2, AlertCircle } from 'lucide-react';
+import { Lock, Mail, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export const Auth = () => {
   const [loading, setLoading] = useState(false);
@@ -8,28 +8,34 @@ export const Auth = () => {
   const [password, setPassword] = useState('');
   const [isLogin, setIsLogin] = useState(true); // Giriş mi Kayıt mı?
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null); // YENİ: Başarı mesajı
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccess(null);
 
     try {
       if (isLogin) {
-        // GİRİŞ YAP
+        // --- GİRİŞ YAP ---
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
       } else {
-        // KAYIT OL
+        // --- KAYIT OL ---
         const { error } = await supabase.auth.signUp({
           email,
           password,
         });
         if (error) throw error;
-        // Otomatik giriş yapılmış olabilir veya onay gerekebilir
+        
+        // Kayıt başarılıysa:
+        setSuccess("Hesabın başarıyla oluşturuldu! Şimdi giriş yapabilirsin.");
+        setIsLogin(true); // Otomatik olarak giriş ekranına geç
+        setPassword(''); // Şifreyi temizle
       }
     } catch (err: any) {
       setError(err.message);
@@ -53,10 +59,19 @@ export const Auth = () => {
             </p>
           </div>
 
+          {/* HATA MESAJI */}
           {error && (
-            <div className="mb-6 p-4 bg-red-900/20 border border-red-900/50 rounded-lg flex items-start gap-3">
+            <div className="mb-6 p-4 bg-red-900/20 border border-red-900/50 rounded-lg flex items-start gap-3 animate-fade-in">
               <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
               <p className="text-red-200 text-sm">{error}</p>
+            </div>
+          )}
+
+          {/* BAŞARI MESAJI (YENİ) */}
+          {success && (
+            <div className="mb-6 p-4 bg-green-900/20 border border-green-900/50 rounded-lg flex items-start gap-3 animate-fade-in">
+              <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
+              <p className="text-green-200 text-sm">{success}</p>
             </div>
           )}
 
@@ -107,7 +122,11 @@ export const Auth = () => {
 
           <div className="mt-6 text-center">
             <button
-              onClick={() => setIsLogin(!isLogin)}
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setError(null);
+                setSuccess(null);
+              }}
               className="text-zinc-500 hover:text-zinc-300 text-sm transition-colors"
             >
               {isLogin ? "Hesabın yok mu? Kayıt ol" : "Zaten hesabın var mı? Giriş yap"}
