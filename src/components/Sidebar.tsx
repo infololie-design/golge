@@ -131,3 +131,4 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
     </>
   );
 };
+
