@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, ArrowRight, CheckCircle2, PenLine, XCircle } from 'lucide-react'; // XCircle eklendi
+import { AlertTriangle, ArrowRight, CheckCircle2, PenLine, XCircle } from 'lucide-react';
 
 interface ShadowReport {
   type: string;
@@ -12,45 +12,55 @@ interface ShadowCardProps {
   data: ShadowReport;
   onComplete?: (feedback: string) => void;
   isCompleted?: boolean;
-  initialTaskStatus?: boolean[]; // YENİ: Görevlerin durumu (true/false dizisi)
+  initialTaskStatus?: boolean[]; // YENİ: Görevlerin durumu ChatContainer'dan gelir
 }
 
 export const ShadowCard: React.FC<ShadowCardProps> = ({ data, onComplete, isCompleted = false, initialTaskStatus }) => {
+  // Görevleri başlatırken: Eğer initialTaskStatus varsa onu kullan, yoksa false (boş) yap.
   const [tasks, setTasks] = useState(
     data.homework.map((task, index) => ({ 
       text: task, 
-      // Eğer dışarıdan durum geldiyse onu kullan, yoksa false
       completed: initialTaskStatus ? initialTaskStatus[index] : false, 
       note: '' 
     }))
   );
+  
   const [isSubmitted, setIsSubmitted] = useState(isCompleted);
 
+  // Eğer kart sonradan "tamamlandı" moduna geçerse veya dışarıdan durum güncellenirse senkronize et
   useEffect(() => {
     if (isCompleted) {
       setIsSubmitted(true);
-      // BURASI DEĞİŞTİ: Artık hepsini true yapmıyoruz.
-      // Eğer initialTaskStatus varsa onu kullanıyoruz.
       if (initialTaskStatus) {
-        setTasks(prev => prev.map((t, i) => ({ ...t, completed: initialTaskStatus[i] })));
+        setTasks(prev => prev.map((t, i) => ({ 
+          ...t, 
+          completed: initialTaskStatus[i] 
+        })));
       }
     }
   }, [isCompleted, initialTaskStatus]);
 
   const toggleTask = (index: number) => {
+    // Eğer rapor gönderildiyse değiştirmeye izin verme
+    if (isSubmitted) return;
+    
     const newTasks = [...tasks];
     newTasks[index].completed = !newTasks[index].completed;
     setTasks(newTasks);
   };
 
   const updateNote = (index: number, note: string) => {
+    if (isSubmitted) return;
+
     const newTasks = [...tasks];
     newTasks[index].note = note;
     setTasks(newTasks);
   };
 
   const handleSubmit = () => {
+    // En az bir görev yapılmalı veya not yazılmalı kontrolü isteğe bağlı eklenebilir
     setIsSubmitted(true);
+    
     if (onComplete) {
       const summary = tasks.map((t, i) => 
         `Görev ${i+1}: ${t.completed ? 'YAPILDI' : 'YAPILMADI'} - Not: ${t.note}`
@@ -95,7 +105,7 @@ export const ShadowCard: React.FC<ShadowCardProps> = ({ data, onComplete, isComp
         <div className="space-y-4">
           {tasks.map((task, index) => (
             <div key={index} className={`p-4 rounded-lg border transition-all ${isSubmitted ? (task.completed ? 'bg-green-900/10 border-green-900/30' : 'bg-red-900/10 border-red-900/30') : 'bg-zinc-900/30 border-zinc-800'}`}>
-              <div className="flex items-start gap-3 cursor-pointer" onClick={() => !isSubmitted && toggleTask(index)}>
+              <div className="flex items-start gap-3 cursor-pointer" onClick={() => toggleTask(index)}>
                 
                 {/* Checkbox Kutusu */}
                 <div className={`mt-1 min-w-[20px] h-5 rounded border flex items-center justify-center transition-colors 
@@ -104,7 +114,7 @@ export const ShadowCard: React.FC<ShadowCardProps> = ({ data, onComplete, isComp
                     : (task.completed ? 'bg-green-600 border-green-600' : 'border-zinc-600')
                   }`}>
                   
-                  {/* İkonlar: Yapıldıysa Tik, Yapılmadıysa (ve gönderildiyse) Çarpı */}
+                  {/* İkonlar */}
                   {task.completed && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
                   {!task.completed && isSubmitted && <XCircle className="w-3.5 h-3.5 text-red-500" />}
                 </div>
@@ -144,7 +154,7 @@ export const ShadowCard: React.FC<ShadowCardProps> = ({ data, onComplete, isComp
           <ArrowRight className="w-4 h-4" />
         </button>
       ) : (
-        <div className="text-center p-3 bg-green-900/20 text-green-400 rounded border border-green-900/30 text-sm font-medium">
+        <div className="text-center p-3 bg-green-900/20 text-green-400 rounded border border-green-900/30 text-sm font-medium animate-fade-in">
           ✓ Bu aşama tamamlandı. Dönüşüm başladı.
         </div>
       )}
