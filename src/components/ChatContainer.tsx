@@ -15,41 +15,27 @@ interface ChatContainerProps {
   currentRoom: RoomType;
   userId: string;
   isSafeMode: boolean;
+  onProgressUpdate: () => void; // <--- YENİ PROP
 }
 
 export interface ChatContainerHandle {
   triggerModeSwitch: (newMode: boolean) => void;
 }
 
-// --- GÜÇLENDİRİLMİŞ JSON AYIKLAYICI (CIMBIZ) ---
 const parseShadowReport = (content: string) => {
   try {
-    // 1. İlk '{' karakterini bul
-    const firstBrace = content.indexOf('{');
-    // 2. Son '}' karakterini bul
-    const lastBrace = content.lastIndexOf('}');
-
-    // Eğer parantez yoksa JSON değildir
-    if (firstBrace === -1 || lastBrace === -1) return null;
-
-    // 3. Sadece bu aralığı çekip al (Etraftaki çöpleri at)
-    const jsonString = content.substring(firstBrace, lastBrace + 1);
-
-    // 4. Parse et
-    const parsed = JSON.parse(jsonString);
-
-    // 5. Bizim raporumuz mu kontrol et
-    if (parsed.type === 'shadow_report') {
-      return parsed;
+    const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
+    const jsonMatch = cleanContent.match(/\{[\s\S]*"type":\s*"shadow_report"[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
     }
   } catch (e) {
-    // Hata olursa (JSON bozuksa) sessizce null dön, normal mesaj olarak göster
     return null;
   }
   return null;
 };
 
-export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>(({ currentRoom, userId, isSafeMode }, ref) => {
+export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>(({ currentRoom, userId, isSafeMode, onProgressUpdate }, ref) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRoomInitializing, setIsRoomInitializing] = useState(false);
@@ -259,6 +245,9 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
         user_id: userId,
         room_id: currentRoom
       }, { onConflict: 'user_id, room_id' });
+
+      // YENİ: Patron'a haber ver (İlerleme güncellendi)
+      onProgressUpdate(); 
 
     } catch (err) {
       console.error("Rapor kaydedilemedi:", err);
