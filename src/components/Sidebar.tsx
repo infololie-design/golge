@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ROOMS, RoomType } from '../types';
-import { X, Trash2, LogOut, ShieldCheck, Calendar } from 'lucide-react'; // Calendar eklendi
+import { X, Trash2, LogOut, ShieldCheck, Calendar, Lock } from 'lucide-react';
 import { clearSession } from '../utils/sessionManager';
 import { supabase } from '../lib/supabase';
 import { AdminDashboard } from './AdminDashboard';
@@ -14,18 +14,43 @@ interface SidebarProps {
   onClose: () => void;
   isSafeMode?: boolean;
   onToggleSafeMode?: () => void;
-  onOpenJournal: () => void; // <--- YENİ PROP
+  onOpenJournal: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isOpen, onClose, onOpenJournal }) => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [completedRooms, setCompletedRooms] = useState<string[]>([]); // Tamamlanan odalar
 
   useEffect(() => {
+    // Kullanıcıyı al
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setUserEmail(user.email || null);
+      if (user) {
+        setUserEmail(user.email || null);
+        checkCompletedRooms(user.id);
+      }
     });
   }, []);
+
+  // Hangi odalarda rapor alınmış kontrol et
+  const checkCompletedRooms = async (userId: string) => {
+    try {
+      // Veritabanında "GÖREV RAPORU" içeren mesajları bul
+      // Bu mesajlar, kullanıcının o odadaki görevi tamamladığını gösterir
+      const { data } = await supabase
+        .from('chat_history')
+        .select('room')
+        .eq('user_id', userId)
+        .ilike('content', '%📝 **GÖREV RAPORU:**%');
+
+      if (data) {
+        const rooms = Array.from(new Set(data.map(item => item.room)));
+        setCompletedRooms(rooms);
+      }
+    } catch (error) {
+      console.error('Room check error:', error);
+    }
+  };
 
   const handleReset = () => {
     if (window.confirm('Tüm konuşma geçmişi ve hafıza silinecek. En başa dönmek istediğine emin misin?')) {
@@ -39,6 +64,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
       await supabase.auth.signOut();
     }
   };
+
+  // Simya odasının kilidini kontrol et
+  // Şimdilik test için: En az 1 oda tamamlandıysa aç (Normalde 4 olmalı)
+  const isAlchemyUnlocked = completedRooms.length >= 1; 
 
   return (
     <>
@@ -74,27 +103,37 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
           <div className="mb-6">
             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4">Odalar</h2>
             <nav className="space-y-2">
-              {ROOMS.map((room) => (
-                <button
-                  key={room.id}
-                  onClick={() => onRoomChange(room.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-4 rounded-lg transition-all duration-200 text-left group border ${
-                    currentRoom === room.id
-                      ? 'bg-red-900/20 border-red-900/50 text-red-400'
-                      : 'bg-transparent border-transparent hover:bg-zinc-900 text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  <span className="text-xl">{room.icon}</span>
-                  <span className="font-medium text-sm">{room.name}</span>
-                </button>
-              ))}
+              {ROOMS.map((room) => {
+                // Simya odası kilitli mi?
+                const isLocked = room.id === 'simya' && !isAlchemyUnlocked;
+
+                return (
+                  <button
+                    key={room.id}
+                    onClick={() => !isLocked && onRoomChange(room.id)}
+                    disabled={isLocked}
+                    className={`w-full flex items-center justify-between px-4 py-4 rounded-lg transition-all duration-200 text-left group border ${
+                      currentRoom === room.id
+                        ? 'bg-red-900/20 border-red-900/50 text-red-400'
+                        : 'bg-transparent border-transparent hover:bg-zinc-900 text-zinc-400 hover:text-white'
+                    } ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">{room.icon}</span>
+                      <span className="font-medium text-sm">{room.name}</span>
+                    </div>
+                    
+                    {/* Kilit İkonu */}
+                    {isLocked && <Lock className="w-4 h-4 text-zinc-600" />}
+                  </button>
+                );
+              })}
             </nav>
           </div>
         </div>
 
         <div className="p-6 border-t border-zinc-900 space-y-2">
           
-          {/* GÜNLÜK BUTONU (YENİ) */}
           <button 
             onClick={onOpenJournal}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-900 hover:text-white transition-all mb-2 border border-zinc-800 hover:border-zinc-700"
