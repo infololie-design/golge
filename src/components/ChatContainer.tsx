@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Message, ApiResponse, RoomType } from '../types';
-import { getSessionId, saveMessages, loadMessages } from '../utils/sessionManager';
+import { saveMessages, loadMessages } from '../utils/sessionManager'; // getSessionId sildik
 import { MessageBubble } from './MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
 import { ChatInput } from './ChatInput';
@@ -11,9 +11,9 @@ const N8N_WEBHOOK_URL = 'https://n8n.lolie.com.tr/webhook/61faf25c-aab1-4246-adf
 
 interface ChatContainerProps {
   currentRoom: RoomType;
+  userId: string; // <--- YENİ: Artık dışarıdan gerçek ID alıyoruz
 }
 
-// JSON Algılama Fonksiyonu
 const parseShadowReport = (content: string) => {
   try {
     const cleanJson = content.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -26,38 +26,30 @@ const parseShadowReport = (content: string) => {
   return null;
 };
 
-export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
+export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const sessionId = useRef(getSessionId());
   
-  // Anlık oda takibi için Ref
+  // ARTIK SESSION ID OLARAK GERÇEK USER ID KULLANIYORUZ
+  const sessionId = userId; 
+  
   const currentRoomRef = useRef<RoomType>(currentRoom);
-  
-  // Hangi odaların başlatıldığını takip etmek için
   const initializedRooms = useRef<Set<string>>(new Set());
-
-  // Son işlem zamanını takip et (Arka plan kontrolü için)
   const lastActivityTime = useRef<number>(Date.now());
 
-  // Oda her değiştiğinde Ref'i güncelle
   useEffect(() => {
     currentRoomRef.current = currentRoom;
   }, [currentRoom]);
 
-  // --- YENİ: ARKA PLAN / GÖRÜNÜRLÜK KONTROLÜ ---
+  // --- GÖRÜNÜRLÜK KONTROLÜ ---
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        // Kullanıcı ekrana geri döndü
         const now = Date.now();
         const timeDiff = now - lastActivityTime.current;
-
-        // Eğer 10 saniyeden fazla arka planda kaldıysa ve hala yükleniyor görünüyorsa
         if (isLoading && timeDiff > 10000) {
           setIsLoading(false);
-          // Kullanıcıya uyarı mesajı ekle
           const errorMessage: Message = {
             id: crypto.randomUUID(),
             content: '⚠️ Uygulama arka planda kaldığı için bağlantı koptu. Lütfen son mesajınızı tekrar gönderin.',
@@ -71,18 +63,13 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
           });
         }
       } else {
-        // Kullanıcı arka plana gitti, zamanı kaydet
         lastActivityTime.current = Date.now();
       }
     };
-
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [isLoading]); // isLoading değişince listener güncellenir
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isLoading]);
 
-  // --- ZAMAN AŞIMI ---
   const fetchWithTimeout = async (url: string, options: RequestInit, timeout = 40000) => {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
@@ -112,18 +99,17 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
     }
   }, [currentRoom]);
 
-  // --- MERKEZİ AI İŞLEME ---
   const processAIRequest = async (payload: any, targetRoom: string) => {
     if (currentRoomRef.current === targetRoom) {
       setIsLoading(true);
-      lastActivityTime.current = Date.now(); // İşlem başlangıç zamanını kaydet
+      lastActivityTime.current = Date.now();
     }
 
     try {
       const response = await fetchWithTimeout(N8N_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payload, sessionId: sessionId.current }),
+        body: JSON.stringify({ ...payload, sessionId: sessionId }), // <-- BURADA userId GİDİYOR
       });
 
       if (!response.ok) throw new Error('Network error');
@@ -150,7 +136,6 @@ export const ChatContainer = ({ currentRoom }: ChatContainerProps) => {
       console.error('AI Process Error:', error);
       if (currentRoomRef.current === targetRoom) {
         setIsLoading(false);
-        // Hata durumunda kullanıcıya bilgi ver
         const errorMessage: Message = {
           id: crypto.randomUUID(),
           content: 'Bağlantı hatası oluştu. Lütfen tekrar deneyin.',
