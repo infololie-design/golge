@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ROOMS, RoomType } from '../types';
-import { X, Trash2, LogOut, ShieldCheck } from 'lucide-react';
+import { X, Trash2, LogOut, ShieldCheck, Calendar } from 'lucide-react'; // Calendar eklendi
 import { clearSession } from '../utils/sessionManager';
 import { supabase } from '../lib/supabase';
 import { AdminDashboard } from './AdminDashboard';
@@ -12,12 +12,12 @@ interface SidebarProps {
   onRoomChange: (room: RoomType) => void;
   isOpen: boolean;
   onClose: () => void;
-  isSafeMode?: boolean; // Artık kullanılmıyor ama prop hatası vermesin diye opsiyonel bıraktık
+  isSafeMode?: boolean;
   onToggleSafeMode?: () => void;
-  onOpenBreathing?: () => void;
+  onOpenJournal: () => void; // <--- YENİ PROP
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isOpen, onClose }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isOpen, onClose, onOpenJournal }) => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [showAdmin, setShowAdmin] = useState(false);
 
@@ -94,7 +94,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
 
         <div className="p-6 border-t border-zinc-900 space-y-2">
           
-          {/* NEFES ALANI BUTONU KALDIRILDI */}
+          {/* GÜNLÜK BUTONU (YENİ) */}
+          <button 
+            onClick={onOpenJournal}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-900 hover:text-white transition-all mb-2 border border-zinc-800 hover:border-zinc-700"
+          >
+            <Calendar className="w-5 h-5" />
+            <span className="font-medium text-sm">Gölge Günlüğü</span>
+          </button>
 
           {userEmail === ADMIN_EMAIL && (
             <button onClick={() => setShowAdmin(true)} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-900 hover:text-blue-400 transition-all mb-2 border border-zinc-800">
