@@ -43,7 +43,6 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
     currentRoomRef.current = currentRoom;
   }, [currentRoom]);
 
-  // --- GÖRÜNÜRLÜK KONTROLÜ ---
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -80,7 +79,6 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
     }
   };
 
-  // --- ODA DEĞİŞİMİ VE GEÇMİŞİ YÜKLEME ---
   useEffect(() => {
     const loadHistoryFromCloud = async () => {
       setIsLoading(true);
@@ -103,8 +101,6 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
             sender: item.role === 'user' ? 'user' : 'ai',
             timestamp: new Date(item.created_at)
           }))
-          // --- DÜZELTME 1: SİSTEM MESAJLARINI FİLTRELE ---
-          // İçinde [SİSTEM geçen mesajları ekrana basma
           .filter((msg: Message) => !msg.content.includes('[SİSTEM'));
 
           setMessages(historyMessages);
@@ -195,10 +191,7 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
     processAIRequest({ message: content }, currentRoom);
   };
 
-  // --- DÜZELTME 2: GÖREVLERİ KAYDET ---
   const handleTaskCompletion = async (feedbackSummary: string) => {
-    
-    // 1. Kullanıcının notlarını EKRANA BAS (Kalıcı olsun)
     const userNoteMessage: Message = {
       id: crypto.randomUUID(),
       content: `📝 **GÖREV RAPORU:**\n\n${feedbackSummary}`,
@@ -207,19 +200,14 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
     };
     setMessages(prev => [...prev, userNoteMessage]);
 
-    // 2. Bu notu veritabanına kaydetmek için n8n'e gönder (Ama AI'ya cevap verdirme, sadece kaydet)
-    // Not: n8n tarafı zaten gelen her şeyi kaydediyor. Biz sadece AI'yı tetiklemek için gönderiyoruz.
-    
     const systemPrompt = `
-      [SİSTEM BİLGİSİ: Kullanıcı görevleri tamamladı.
-      KULLANICI NOTLARI:
+      [SİSTEM BİLGİSİ: Kullanıcı verilen gölge görevlerini tamamladı ve şu notları düştü:
       ${feedbackSummary}
       
       TALİMAT: Artık "Yüzleşme/Sorgulama" aşamasını bitir. "ENTEGRASYON/REHBERLİK" aşamasına geç.
       Kullanıcının notlarını analiz et. Zorlandığı yerleri şefkatle ama gerçekçi bir dille yorumla.
-      Artık onu karanlıkta bırakma, tünelin ucundaki ışığı göster.]
+      Artık onu karanlıkta bırakma, tünelin ucundaki ışığı göster. Daha yapıcı, daha bilge bir tona bürün.]
     `;
-    
     await processAIRequest({ message: systemPrompt }, currentRoom);
   };
 
@@ -246,11 +234,17 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
             const reportData = message.sender === 'ai' ? parseShadowReport(message.content) : null;
             
             if (reportData) {
+              // --- DEDEKTİF MODU ---
+              // Bir sonraki mesaja bak. Eğer "GÖREV RAPORU" ise, bu kart tamamlanmıştır.
+              const nextMessage = messages[index + 1];
+              const isCompleted = nextMessage?.content.includes('📝 **GÖREV RAPORU:**');
+
               return (
                 <ShadowCard 
                   key={message.id} 
                   data={reportData} 
-                  onComplete={handleTaskCompletion} 
+                  onComplete={handleTaskCompletion}
+                  isCompleted={isCompleted} // <--- YENİ ÖZELLİK
                 />
               );
             }
