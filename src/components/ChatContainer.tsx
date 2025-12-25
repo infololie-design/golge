@@ -43,6 +43,7 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
     currentRoomRef.current = currentRoom;
   }, [currentRoom]);
 
+  // --- GÖRÜNÜRLÜK KONTROLÜ ---
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -79,6 +80,7 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
     }
   };
 
+  // --- ODA DEĞİŞİMİ VE GEÇMİŞİ YÜKLEME ---
   useEffect(() => {
     const loadHistoryFromCloud = async () => {
       setIsLoading(true);
@@ -90,7 +92,7 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
           .select('*')
           .eq('user_id', userId)
           .eq('room', currentRoom)
-          .order('created_at', { ascending: true });
+          .order('created_at', { ascending: true }); // Tarihe göre sırala
 
         if (error) throw error;
 
@@ -101,6 +103,8 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
             sender: item.role === 'user' ? 'user' : 'ai',
             timestamp: new Date(item.created_at)
           }))
+          // --- DÜZELTME 1: GÖREV RAPORUNU SİLMİYORUZ ---
+          // Sadece [SİSTEM] mesajlarını siliyoruz. Görev raporları hafızada kalmalı ki kart yeşil olsun.
           .filter((msg: Message) => !msg.content.includes('[SİSTEM'));
 
           setMessages(historyMessages);
@@ -233,9 +237,15 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
           {messages.map((message, index) => {
             const reportData = message.sender === 'ai' ? parseShadowReport(message.content) : null;
             
+            // --- DÜZELTME 2: GÖREV RAPORUNU GİZLE ---
+            // Eğer mesaj bir "Görev Raporu" ise, onu ekrana basma (null döndür).
+            // Ama mesaj listesinde durduğu için aşağıdaki 'isCompleted' kontrolü çalışacak.
+            if (message.content.includes('📝 **GÖREV RAPORU:**')) {
+              return null;
+            }
+
             if (reportData) {
-              // --- DEDEKTİF MODU ---
-              // Bir sonraki mesaja bak. Eğer "GÖREV RAPORU" ise, bu kart tamamlanmıştır.
+              // Dedektif: Bir sonraki mesaja bak, eğer Görev Raporu ise kartı yeşil yap.
               const nextMessage = messages[index + 1];
               const isCompleted = nextMessage?.content.includes('📝 **GÖREV RAPORU:**');
 
@@ -244,7 +254,7 @@ export const ChatContainer = ({ currentRoom, userId }: ChatContainerProps) => {
                   key={message.id} 
                   data={reportData} 
                   onComplete={handleTaskCompletion}
-                  isCompleted={isCompleted} // <--- YENİ ÖZELLİK
+                  isCompleted={isCompleted} 
                 />
               );
             }
