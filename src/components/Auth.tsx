@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Lock, Mail, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Lock, Mail, Loader2, AlertCircle, CheckCircle2, User } from 'lucide-react';
 
 export const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLogin, setIsLogin] = useState(true); // Giriş mi Kayıt mı?
+  const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null); // YENİ: Başarı mesajı
+  const [success, setSuccess] = useState<string | null>(null);
+  
+  // YENİ: Cinsiyet State'i (Varsayılan: Kadın)
+  const [gender, setGender] = useState<'male' | 'female'>('female');
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,17 +28,22 @@ export const Auth = () => {
         });
         if (error) throw error;
       } else {
-        // --- KAYIT OL ---
+        // --- KAYIT OL (GÜNCELLENDİ) ---
         const { error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            // YENİ: Cinsiyeti kullanıcının kimliğine (metadata) kaydediyoruz
+            data: {
+              gender: gender 
+            }
+          }
         });
         if (error) throw error;
         
-        // Kayıt başarılıysa:
         setSuccess("Hesabın başarıyla oluşturuldu! Şimdi giriş yapabilirsin.");
-        setIsLogin(true); // Otomatik olarak giriş ekranına geç
-        setPassword(''); // Şifreyi temizle
+        setIsLogin(true);
+        setPassword('');
       }
     } catch (err: any) {
       setError(err.message);
@@ -48,7 +56,6 @@ export const Auth = () => {
     <div className="min-h-screen bg-black flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
         
-        {/* Arka Plan Efekti */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-red-900/10 blur-3xl rounded-full -mr-20 -mt-20 pointer-events-none"></div>
 
         <div className="relative z-10">
@@ -59,7 +66,6 @@ export const Auth = () => {
             </p>
           </div>
 
-          {/* HATA MESAJI */}
           {error && (
             <div className="mb-6 p-4 bg-red-900/20 border border-red-900/50 rounded-lg flex items-start gap-3 animate-fade-in">
               <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
@@ -67,7 +73,6 @@ export const Auth = () => {
             </div>
           )}
 
-          {/* BAŞARI MESAJI (YENİ) */}
           {success && (
             <div className="mb-6 p-4 bg-green-900/20 border border-green-900/50 rounded-lg flex items-start gap-3 animate-fade-in">
               <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
@@ -106,6 +111,39 @@ export const Auth = () => {
                 />
               </div>
             </div>
+
+            {/* YENİ: CİNSİYET SEÇİMİ (Sadece Kayıt Olurken Görünür) */}
+            {!isLogin && (
+              <div className="animate-fade-in">
+                <label className="block text-xs font-medium text-zinc-400 mb-2 uppercase tracking-wider">Cinsiyet (Analiz İçin)</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setGender('female')}
+                    className={`flex items-center justify-center gap-2 py-3 rounded-lg border transition-all ${
+                      gender === 'female' 
+                        ? 'bg-red-900/20 border-red-500 text-red-400' 
+                        : 'bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:border-zinc-700'
+                    }`}
+                  >
+                    <User className="w-4 h-4" />
+                    Kadın
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGender('male')}
+                    className={`flex items-center justify-center gap-2 py-3 rounded-lg border transition-all ${
+                      gender === 'male' 
+                        ? 'bg-red-900/20 border-red-500 text-red-400' 
+                        : 'bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:border-zinc-700'
+                    }`}
+                  >
+                    <User className="w-4 h-4" />
+                    Erkek
+                  </button>
+                </div>
+              </div>
+            )}
 
             <button
               type="submit"
