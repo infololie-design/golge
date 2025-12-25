@@ -16,6 +16,7 @@ interface ChatContainerProps {
   userId: string;
   isSafeMode: boolean;
   onProgressUpdate: () => void;
+  userGender: string; // <--- YENİ: Cinsiyet Prop'u
 }
 
 export interface ChatContainerHandle {
@@ -25,19 +26,13 @@ export interface ChatContainerHandle {
 // --- GÜÇLENDİRİLMİŞ JSON DEDEKTİFİ (CIMBIZ) ---
 const parseShadowReport = (content: string) => {
   try {
-    // 1. Önce Markdown kod bloklarını temizle
     let cleanContent = content.replace(/```json/g, '').replace(/```/g, '');
-    
-    // 2. İçinde JSON parçasını bul (Süslü parantezlerin arasını al)
-    // Regex: { ile başla, içinde "type": "shadow_report" geçsin, } ile bit.
     const jsonMatch = cleanContent.match(/\{[\s\S]*"type":\s*"shadow_report"[\s\S]*\}/);
     
     if (jsonMatch) {
-      // Bulunan JSON parçasını parse et
       return JSON.parse(jsonMatch[0]);
     }
   } catch (e) {
-    // Hata olursa (JSON bozuksa) sessizce null dön, normal mesaj olarak göster
     return null;
   }
   return null;
@@ -52,7 +47,7 @@ const parseTaskStatus = (reportContent: string) => {
   return tasksStatus;
 };
 
-export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>(({ currentRoom, userId, isSafeMode, onProgressUpdate }, ref) => {
+export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>(({ currentRoom, userId, isSafeMode, onProgressUpdate, userGender }, ref) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRoomInitializing, setIsRoomInitializing] = useState(false);
@@ -180,7 +175,8 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
           ...payload, 
           sessionId: sessionId, 
           room: targetRoom,
-          mode: payload.mode || (isSafeMode ? 'safe' : 'shadow') 
+          mode: payload.mode || (isSafeMode ? 'safe' : 'shadow'),
+          gender: userGender // <--- YENİ: Cinsiyet bilgisini n8n'e gönderiyoruz
         }), 
       });
 
@@ -311,6 +307,7 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
               const nextMessage = messages[index + 1];
               const isCompleted = nextMessage?.content.includes('📝 **GÖREV RAPORU:**');
               
+              // YENİ: Görev durumlarını çözümle
               const completedTasks = isCompleted ? parseTaskStatus(nextMessage.content) : undefined;
 
               return (
@@ -319,7 +316,7 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
                   data={reportData} 
                   onComplete={handleTaskCompletion}
                   isCompleted={isCompleted} 
-                  initialTaskStatus={completedTasks} 
+                  initialTaskStatus={completedTasks} // <--- YENİ: Kart'a gönderiyoruz
                 />
               );
             }
