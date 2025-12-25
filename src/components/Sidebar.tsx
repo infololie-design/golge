@@ -1,8 +1,12 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ROOMS, RoomType } from '../types';
-import { X, Trash2, LogOut } from 'lucide-react';
+import { X, Trash2, LogOut, ShieldCheck } from 'lucide-react';
 import { clearSession } from '../utils/sessionManager';
-import { supabase } from '../lib/supabase'; // Supabase eklendi
+import { supabase } from '../lib/supabase';
+import { AdminDashboard } from './AdminDashboard'; // Admin paneli eklendi
+
+// --- BURAYA KENDİ E-POSTANI YAZ ---
+const ADMIN_EMAIL = 'm.mrcn94@gmail.com'; 
 
 interface SidebarProps {
   currentRoom: RoomType;
@@ -12,7 +16,16 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isOpen, onClose }) => {
-  
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [showAdmin, setShowAdmin] = useState(false);
+
+  // Kullanıcının e-postasını öğren
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setUserEmail(user.email || null);
+    });
+  }, []);
+
   const handleReset = () => {
     if (window.confirm('Tüm konuşma geçmişi ve hafıza silinecek. En başa dönmek istediğine emin misin?')) {
       clearSession();
@@ -20,16 +33,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
     }
   };
 
-  // ÇIKIŞ YAPMA FONKSİYONU
   const handleLogout = async () => {
     if (window.confirm('Çıkış yapmak istediğine emin misin?')) {
       await supabase.auth.signOut();
-      // Sayfa otomatik olarak Auth ekranına dönecek (App.tsx sayesinde)
     }
   };
 
   return (
     <>
+      {/* Admin Paneli Modalı */}
+      {showAdmin && <AdminDashboard onClose={() => setShowAdmin(false)} />}
+
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden"
@@ -92,8 +106,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentRoom, onRoomChange, isO
           </div>
         </div>
 
-        {/* ALT KISIM: ÇIKIŞ BUTONU */}
-        <div className="p-6 border-t border-zinc-900">
+        <div className="p-6 border-t border-zinc-900 space-y-2">
+          
+          {/* SADECE ADMİN GÖREBİLİR */}
+          {userEmail === ADMIN_EMAIL && (
+            <button 
+              onClick={() => setShowAdmin(true)}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-900 hover:text-blue-400 transition-all mb-2 border border-zinc-800 hover:border-blue-900/30"
+            >
+              <ShieldCheck className="w-5 h-5" />
+              <span className="font-medium text-sm">Yönetim Paneli</span>
+            </button>
+          )}
+
           <button 
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-500 hover:bg-zinc-900 hover:text-red-400 transition-all"
