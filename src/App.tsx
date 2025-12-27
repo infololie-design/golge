@@ -20,10 +20,14 @@ function App() {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  // YENİ: Kullanıcı Cinsiyeti (Varsayılan: Kadın)
+  // Kullanıcı Cinsiyeti (Varsayılan: Kadın)
   const [userGender, setUserGender] = useState<string>('female');
 
   const chatRef = useRef<ChatContainerHandle>(null);
+  
+  // YENİ: Sayfanın ilk kez yüklenip yüklenmediğini takip eden ref
+  // Bu sayede refresh atıldığında modalın tekrar açılmasını önleyeceğiz.
+  const isInitialLoad = useRef(true);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -37,8 +41,6 @@ function App() {
       
       if (session) {
         checkProgress(session.user.id);
-        // YENİ: Cinsiyet bilgisini metadata'dan çek
-        // Eğer eski kullanıcıysa ve cinsiyeti yoksa varsayılan 'female' olsun
         setUserGender(session.user.user_metadata?.gender || 'female');
       }
     });
@@ -49,7 +51,6 @@ function App() {
       
       if (session) {
         checkProgress(session.user.id);
-        // YENİ: Oturum değişince cinsiyeti güncelle
         setUserGender(session.user.user_metadata?.gender || 'female');
       }
     });
@@ -69,9 +70,22 @@ function App() {
 
       if (data) {
         const rooms = data.map(item => item.room_id);
+
+        // YENİ MANTIK: İLK YÜKLEME KONTROLÜ
+        if (isInitialLoad.current) {
+           // Eğer bu sayfa ilk açılışıysa ve görevler zaten bitmişse:
+           // Sadece durumu güncelle ama MODALI AÇMA.
+           setCompletedRooms(rooms);
+           isInitialLoad.current = false; // Artık ilk yükleme bitti
+           return; 
+        }
+
+        // Eğer kullanıcı şu an aktif olarak odaları tamamlıyorsa (Sohbet sırasında):
+        // Eski oda sayısı 2'den azsa VE yeni oda sayısı 2 veya daha fazlaysa modalı aç.
         if (completedRooms.length < 2 && rooms.length >= 2) {
           setShowAlchemyModal(true);
         }
+        
         setCompletedRooms(rooms);
       }
     } catch (error) {
@@ -150,7 +164,7 @@ function App() {
           userId={session.user.id} 
           isSafeMode={isSafeMode}
           onProgressUpdate={() => checkProgress(session.user.id)}
-          userGender={userGender} // <--- YENİ: Cinsiyeti ChatContainer'a gönderiyoruz
+          userGender={userGender} 
         />
       </main>
 
