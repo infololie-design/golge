@@ -20,14 +20,14 @@ function App() {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  // Kullanıcı Cinsiyeti (Varsayılan: Kadın)
+  // Kullanıcı Cinsiyeti
   const [userGender, setUserGender] = useState<string>('female');
 
   const chatRef = useRef<ChatContainerHandle>(null);
-  
-  // YENİ: Sayfanın ilk kez yüklenip yüklenmediğini takip eden ref
-  // Bu sayede refresh atıldığında modalın tekrar açılmasını önleyeceğiz.
-  const isInitialLoad = useRef(true);
+
+  // YENİ ÇÖZÜM: Önceki oda sayısını tutan Ref
+  // Başlangıç değeri -1 (Henüz hiç yükleme yapılmadı demek)
+  const lastRoomCountRef = useRef<number>(-1);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -70,22 +70,27 @@ function App() {
 
       if (data) {
         const rooms = data.map(item => item.room_id);
+        const currentCount = rooms.length;
+        const prevCount = lastRoomCountRef.current;
 
-        // YENİ MANTIK: İLK YÜKLEME KONTROLÜ
-        if (isInitialLoad.current) {
-           // Eğer bu sayfa ilk açılışıysa ve görevler zaten bitmişse:
-           // Sadece durumu güncelle ama MODALI AÇMA.
-           setCompletedRooms(rooms);
-           isInitialLoad.current = false; // Artık ilk yükleme bitti
-           return; 
+        // KESİN ÇÖZÜM MANTIĞI:
+        
+        // Durum 1: Sayfa ilk kez yükleniyor (prevCount -1)
+        if (prevCount === -1) {
+          // Sadece hafızayı güncelle, MODALI AÇMA.
+          lastRoomCountRef.current = currentCount;
+          setCompletedRooms(rooms);
+          return; 
         }
 
-        // Eğer kullanıcı şu an aktif olarak odaları tamamlıyorsa (Sohbet sırasında):
-        // Eski oda sayısı 2'den azsa VE yeni oda sayısı 2 veya daha fazlaysa modalı aç.
-        if (completedRooms.length < 2 && rooms.length >= 2) {
+        // Durum 2: Canlı değişim (Kullanıcı sohbet ederken tamamladı)
+        // Eğer eskiden 2'den az odası varken, ŞİMDİ 2 veya daha fazla odası olduysa
+        if (prevCount < 2 && currentCount >= 2) {
           setShowAlchemyModal(true);
         }
-        
+
+        // Hafızayı ve state'i güncelle
+        lastRoomCountRef.current = currentCount;
         setCompletedRooms(rooms);
       }
     } catch (error) {
