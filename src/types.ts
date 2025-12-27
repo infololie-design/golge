@@ -11,7 +11,7 @@ export const ROOMS: Room[] = [
   { id: 'kokler', name: 'Kökler', icon: '🌳' },
   { id: 'iliskiler', name: 'İlişkiler', icon: '❤️‍🩹' },
   { id: 'para', name: 'Para', icon: '💰' },
-  { id: 'simya', name: 'Simya (Final)', icon: '🏆' }, // Yeni Oda
+  { id: 'simya', name: 'Simya', icon: '🏆' }, // Yeni Oda
 ];
 
 export interface Message {
