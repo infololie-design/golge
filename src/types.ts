@@ -1,5 +1,3 @@
-code
-TypeScript
 export type RoomType = 'yuzlesme' | 'kokler' | 'iliskiler' | 'para' | 'simya' | 'donusum';
 
 export interface Room {
