@@ -214,7 +214,17 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
   };
 
   const triggerRoomIntro = (room: string) => {
-    const systemMessage = `[SİSTEM: Kullanıcı '${room}' odasına geçti. Konuyu buna göre değiştir ve sert bir giriş sorusu sor.]`;
+    // --- BURASI DÜZELTİLDİ: Odaya göre farklı emir gönderiyoruz ---
+    let systemMessage = '';
+    
+    if (room === 'donusum') {
+       // DÖNÜŞÜM ODASI İÇİN YUMUŞAK GİRİŞ EMRİ
+       systemMessage = `[SİSTEM: Kullanıcı '${room}' odasına geçti. Konuyu buna göre değiştir. Lütfen kısa, sakin, yapıcı ve dinleyen bir giriş yap.]`;
+    } else {
+       // DİĞER ODALAR İÇİN SERT GİRİŞ EMRİ (ESKİSİ GİBİ)
+       systemMessage = `[SİSTEM: Kullanıcı '${room}' odasına geçti. Konuyu buna göre değiştir ve sert bir giriş sorusu sor.]`;
+    }
+
     processAIRequest({ message: systemMessage }, room);
   };
 
