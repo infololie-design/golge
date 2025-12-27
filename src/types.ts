@@ -1,4 +1,6 @@
-export type RoomType = 'yuzlesme' | 'kokler' | 'iliskiler' | 'para' | 'simya'; // Simya eklendi
+code
+TypeScript
+export type RoomType = 'yuzlesme' | 'kokler' | 'iliskiler' | 'para' | 'simya' | 'donusum';
 
 export interface Room {
   id: RoomType;
@@ -11,7 +13,8 @@ export const ROOMS: Room[] = [
   { id: 'kokler', name: 'Kökler', icon: '🌳' },
   { id: 'iliskiler', name: 'İlişkiler', icon: '❤️‍🩹' },
   { id: 'para', name: 'Para', icon: '💰' },
-  { id: 'simya', name: 'Simya', icon: '🏆' }, // Yeni Oda
+  { id: 'simya', name: 'Simya', icon: '🏆' },
+  { id: 'donusum', name: 'Dönüşüm', icon: '🦋' }, // YENİ ODA: Günlük Rehberlik
 ];
 
 export interface Message {
