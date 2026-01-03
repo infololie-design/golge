@@ -38,6 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     });
   }, []);
 
+  // --- SIFIRLAMA (Çöp Kutusu) ---
   const handleResetProgress = async () => {
     const confirmed = window.confirm(
       'DİKKAT: Tüm konuşma geçmişin ve odalardaki ilerlemen SUNUCUDAN SİLİNECEK. En başa dönmek istediğine emin misin?'
@@ -47,7 +48,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setIsDeleting(true);
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        
         if (user) {
           await supabase.from('chat_history').delete().eq('user_id', user.id);
           await supabase.from('user_progress').delete().eq('user_id', user.id);
@@ -56,30 +56,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
         window.location.reload();
       } catch (error) {
         console.error('Sıfırlama hatası:', error);
-        alert('Bir hata oluştu. Lütfen internet bağlantını kontrol et.');
+        alert('Hata oluştu.');
       } finally {
         setIsDeleting(false);
       }
     }
   };
 
+  // --- HESAP SİLME (Gerçekten Siler) ---
   const handleDeleteAccount = async () => {
     const confirmed = window.confirm(
-      'HESABIMI SİL: Tüm verilerin kalıcı olarak silinecek ve oturumun kapatılacak. Bu işlem geri alınamaz. Emin misin?'
+      'HESABIMI SİL: Bu işlem geri alınamaz! Hesabın ve tüm verilerin kalıcı olarak silinecek. Onaylıyor musun?'
     );
 
     if (confirmed) {
       setIsDeleting(true);
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          await supabase.from('chat_history').delete().eq('user_id', user.id);
-          await supabase.from('user_progress').delete().eq('user_id', user.id);
-        }
+        // 1. Supabase'deki SQL fonksiyonunu çağır (Auth kullanıcısını siler)
+        const { error } = await supabase.rpc('delete_own_user');
+
+        if (error) throw error;
+
+        // 2. Çıkış yap ve yenile
         await supabase.auth.signOut();
+        localStorage.clear();
         window.location.reload();
+        
       } catch (error) {
         console.error('Hesap silme hatası:', error);
+        alert('Hesap silinirken bir hata oluştu. Lütfen tekrar dene.');
       } finally {
         setIsDeleting(false);
       }
@@ -105,16 +110,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
       )}
 
-      {/* Mobilde arkadaki karartı */}
       {isOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden" onClick={onClose} />
       )}
 
-      {/* 
-        DÜZELTME YAPILAN ALAN: 
-        1. h-full yerine h-[100dvh] (Mobil tarayıcı çubuğu sorunu için)
-        2. flex flex-col (İçeriği dikey dizmek için)
-      */}
       <aside className={`
         fixed md:static inset-y-0 left-0 z-50
         w-72 md:w-64 h-[100dvh] bg-zinc-950 border-r border-zinc-900
@@ -124,11 +123,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         flex flex-col
       `}>
         
-        {/* 
-           ÜST KISIM (Başlık ve Odalar)
-           overflow-y-auto: Eğer ekran küçükse burası kaydırılabilir olacak.
-           flex-1: Boş alanın tamamını burası kaplayacak.
-        */}
+        {/* ÜST KISIM (Odalar) */}
         <div className="p-6 flex-1 flex flex-col overflow-y-auto">
           
           <div className="flex items-center justify-between mb-8 flex-shrink-0">
@@ -139,7 +134,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={handleResetProgress} 
                 disabled={isDeleting}
                 className="text-zinc-500 hover:text-red-500 transition-colors p-1 rounded-md hover:bg-zinc-900 disabled:opacity-50"
-                title="İlerlemeyi Sıfırla"
               >
                 <Trash2 className="w-5 h-5" />
               </button>
@@ -175,7 +169,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <span className="text-xl">{room.icon}</span>
                       <span className="font-medium text-sm">{room.name}</span>
                     </div>
-                    
                     {isLocked && <Lock className="w-4 h-4 text-zinc-600" />}
                   </button>
                 );
@@ -186,10 +179,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* 
            ALT KISIM (Butonlar)
-           flex-shrink-0: Burası asla küçülmeyecek, hep sabit kalacak.
-           border-t: Üst çizgisiyle ayrılacak.
+           DÜZELTME: pb-24 (padding-bottom-24) eklendi.
+           Bu yaklaşık 6rem (96px) boşluk bırakır, böylece butonlar yukarı itilir.
         */}
-        <div className="p-6 border-t border-zinc-900 space-y-2 flex-shrink-0 bg-zinc-950">
+        <div className="p-6 border-t border-zinc-900 space-y-2 flex-shrink-0 bg-zinc-950 pb-24 md:pb-6">
           <button onClick={onOpenJournal} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-900 hover:text-white transition-all mb-2 border border-zinc-800 hover:border-zinc-700">
             <Calendar className="w-5 h-5" />
             <span className="font-medium text-sm">Gölge Günlüğü</span>
