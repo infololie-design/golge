@@ -38,7 +38,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     });
   }, []);
 
-  // --- 1. SIFIRLAMA FONKSİYONU (Üstteki Çöp Kutusu) ---
   const handleResetProgress = async () => {
     const confirmed = window.confirm(
       'DİKKAT: Tüm konuşma geçmişin ve odalardaki ilerlemen SUNUCUDAN SİLİNECEK. En başa dönmek istediğine emin misin?'
@@ -50,13 +49,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         const { data: { user } } = await supabase.auth.getUser();
         
         if (user) {
-          // 1. Konuşma geçmişini sil
           await supabase.from('chat_history').delete().eq('user_id', user.id);
-          // 2. İlerleme durumunu sil
           await supabase.from('user_progress').delete().eq('user_id', user.id);
         }
-
-        // 3. Yerel hafızayı temizle ve yenile
         clearSession();
         window.location.reload();
       } catch (error) {
@@ -68,7 +63,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  // --- 2. HESAP SİLME FONKSİYONU (App Store İçin Şart) ---
   const handleDeleteAccount = async () => {
     const confirmed = window.confirm(
       'HESABIMI SİL: Tüm verilerin kalıcı olarak silinecek ve oturumun kapatılacak. Bu işlem geri alınamaz. Emin misin?'
@@ -78,15 +72,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setIsDeleting(true);
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        
         if (user) {
-          // Verileri temizle
           await supabase.from('chat_history').delete().eq('user_id', user.id);
           await supabase.from('user_progress').delete().eq('user_id', user.id);
-          // Not: Supabase istemci tarafında auth.users tablosundan silmeye izin vermeyebilir.
-          // App Store için "Verileri silip çıkış yapmak" genelde yeterlidir.
         }
-
         await supabase.auth.signOut();
         window.location.reload();
       } catch (error) {
@@ -116,25 +105,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
       )}
 
+      {/* Mobilde arkadaki karartı */}
       {isOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden" onClick={onClose} />
       )}
 
+      {/* 
+        DÜZELTME YAPILAN ALAN: 
+        1. h-full yerine h-[100dvh] (Mobil tarayıcı çubuğu sorunu için)
+        2. flex flex-col (İçeriği dikey dizmek için)
+      */}
       <aside className={`
         fixed md:static inset-y-0 left-0 z-50
-        w-72 md:w-64 h-full bg-zinc-950 border-r border-zinc-900
+        w-72 md:w-64 h-[100dvh] bg-zinc-950 border-r border-zinc-900
         transform transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full'} 
         md:translate-x-0
         flex flex-col
       `}>
-        <div className="p-6 flex-1 flex flex-col">
+        
+        {/* 
+           ÜST KISIM (Başlık ve Odalar)
+           overflow-y-auto: Eğer ekran küçükse burası kaydırılabilir olacak.
+           flex-1: Boş alanın tamamını burası kaplayacak.
+        */}
+        <div className="p-6 flex-1 flex flex-col overflow-y-auto">
           
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center justify-between mb-8 flex-shrink-0">
             <h1 className="text-2xl font-bold text-red-600 tracking-widest">GÖLGE</h1>
             
             <div className="flex items-center gap-3">
-              {/* ÜSTTEKİ SIFIRLAMA BUTONU */}
               <button 
                 onClick={handleResetProgress} 
                 disabled={isDeleting}
@@ -184,7 +184,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        <div className="p-6 border-t border-zinc-900 space-y-2">
+        {/* 
+           ALT KISIM (Butonlar)
+           flex-shrink-0: Burası asla küçülmeyecek, hep sabit kalacak.
+           border-t: Üst çizgisiyle ayrılacak.
+        */}
+        <div className="p-6 border-t border-zinc-900 space-y-2 flex-shrink-0 bg-zinc-950">
           <button onClick={onOpenJournal} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-400 hover:bg-zinc-900 hover:text-white transition-all mb-2 border border-zinc-800 hover:border-zinc-700">
             <Calendar className="w-5 h-5" />
             <span className="font-medium text-sm">Gölge Günlüğü</span>
@@ -202,14 +207,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="font-medium text-sm">Çıkış Yap</span>
           </button>
 
-          {/* APP STORE İÇİN GEREKLİ OLAN HESAP SİLME BUTONU */}
           <button 
             onClick={handleDeleteAccount} 
             disabled={isDeleting}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-900 hover:bg-red-950/30 hover:text-red-600 transition-all mt-4 opacity-60 hover:opacity-100"
           >
             <UserX className="w-5 h-5" />
-            <span className="font-medium text-xs">Hesabımı ve Verilerimi Sil</span>
+            <span className="font-medium text-xs">Hesabımı Sil</span>
           </button>
         </div>
       </aside>
