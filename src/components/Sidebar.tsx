@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ROOMS, RoomType } from '../types';
-import { X, Trash2, LogOut, ShieldCheck, Calendar, Lock } from 'lucide-react';
+import { X, Trash2, LogOut, ShieldCheck, Calendar, Lock, UserX } from 'lucide-react';
 import { clearSession } from '../utils/sessionManager';
 import { supabase } from '../lib/supabase';
 import { AdminDashboard } from './AdminDashboard';
@@ -16,7 +16,7 @@ interface SidebarProps {
   isSafeMode?: boolean;
   onToggleSafeMode?: () => void;
   onOpenJournal: () => void;
-  completedRooms: string[]; // YENİ: Artık dışarıdan alıyor
+  completedRooms: string[];
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
@@ -25,11 +25,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpen, 
   onClose, 
   onOpenJournal,
-  completedRooms // Prop olarak alıyoruz
+  completedRooms
 }) => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showLockedModal, setShowLockedModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -37,10 +38,62 @@ export const Sidebar: React.FC<SidebarProps> = ({
     });
   }, []);
 
-  const handleReset = () => {
-    if (window.confirm('Tüm konuşma geçmişi ve hafıza silinecek. En başa dönmek istediğine emin misin?')) {
-      clearSession();
-      window.location.reload();
+  // --- 1. SIFIRLAMA FONKSİYONU (Üstteki Çöp Kutusu) ---
+  const handleResetProgress = async () => {
+    const confirmed = window.confirm(
+      'DİKKAT: Tüm konuşma geçmişin ve odalardaki ilerlemen SUNUCUDAN SİLİNECEK. En başa dönmek istediğine emin misin?'
+    );
+
+    if (confirmed) {
+      setIsDeleting(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          // 1. Konuşma geçmişini sil
+          await supabase.from('chat_history').delete().eq('user_id', user.id);
+          // 2. İlerleme durumunu sil
+          await supabase.from('user_progress').delete().eq('user_id', user.id);
+        }
+
+        // 3. Yerel hafızayı temizle ve yenile
+        clearSession();
+        window.location.reload();
+      } catch (error) {
+        console.error('Sıfırlama hatası:', error);
+        alert('Bir hata oluştu. Lütfen internet bağlantını kontrol et.');
+      } finally {
+        setIsDeleting(false);
+      }
+    }
+  };
+
+  // --- 2. HESAP SİLME FONKSİYONU (App Store İçin Şart) ---
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm(
+      'HESABIMI SİL: Tüm verilerin kalıcı olarak silinecek ve oturumun kapatılacak. Bu işlem geri alınamaz. Emin misin?'
+    );
+
+    if (confirmed) {
+      setIsDeleting(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          // Verileri temizle
+          await supabase.from('chat_history').delete().eq('user_id', user.id);
+          await supabase.from('user_progress').delete().eq('user_id', user.id);
+          // Not: Supabase istemci tarafında auth.users tablosundan silmeye izin vermeyebilir.
+          // App Store için "Verileri silip çıkış yapmak" genelde yeterlidir.
+        }
+
+        await supabase.auth.signOut();
+        window.location.reload();
+      } catch (error) {
+        console.error('Hesap silme hatası:', error);
+      } finally {
+        setIsDeleting(false);
+      }
     }
   };
 
@@ -50,7 +103,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  // Kilit Kontrolü (Dışarıdan gelen veriye göre)
   const isAlchemyUnlocked = completedRooms.length >= 2; 
 
   return (
@@ -82,7 +134,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <h1 className="text-2xl font-bold text-red-600 tracking-widest">GÖLGE</h1>
             
             <div className="flex items-center gap-3">
-              <button onClick={handleReset} className="text-zinc-500 hover:text-red-500 transition-colors p-1 rounded-md hover:bg-zinc-900">
+              {/* ÜSTTEKİ SIFIRLAMA BUTONU */}
+              <button 
+                onClick={handleResetProgress} 
+                disabled={isDeleting}
+                className="text-zinc-500 hover:text-red-500 transition-colors p-1 rounded-md hover:bg-zinc-900 disabled:opacity-50"
+                title="İlerlemeyi Sıfırla"
+              >
                 <Trash2 className="w-5 h-5" />
               </button>
               <button onClick={onClose} className="md:hidden text-zinc-400 hover:text-white">
@@ -139,9 +197,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           )}
 
-          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-500 hover:bg-zinc-900 hover:text-red-400 transition-all">
+          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-zinc-500 hover:bg-zinc-900 hover:text-gray-300 transition-all">
             <LogOut className="w-5 h-5" />
             <span className="font-medium text-sm">Çıkış Yap</span>
+          </button>
+
+          {/* APP STORE İÇİN GEREKLİ OLAN HESAP SİLME BUTONU */}
+          <button 
+            onClick={handleDeleteAccount} 
+            disabled={isDeleting}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-900 hover:bg-red-950/30 hover:text-red-600 transition-all mt-4 opacity-60 hover:opacity-100"
+          >
+            <UserX className="w-5 h-5" />
+            <span className="font-medium text-xs">Hesabımı ve Verilerimi Sil</span>
           </button>
         </div>
       </aside>
