@@ -25,7 +25,8 @@ export const ChatInput = ({ onSend, disabled }: ChatInputProps) => {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-black/90 backdrop-blur-md border-t border-gray-800/50">
+    // BURASI DEĞİŞTİ: 'fixed' kaldırıldı. Sadece arka plan ve stil kaldı.
+    <div className="w-full bg-black/90 backdrop-blur-md border-t border-gray-800/50">
       <div className="max-w-4xl mx-auto px-4 py-4">
         <div className="flex items-end gap-2">
           <textarea
